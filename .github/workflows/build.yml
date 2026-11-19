@@ -8,6 +8,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Make app icon
+        run: |
+          if [ -f icon.png ]; then cp icon.png icon-src.png; else base64 -d icon.b64 > icon-src.png; fi
+          IM=$(command -v magick || command -v convert)
+          for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            n=${d%%:*}; s=${d##*:}
+            mkdir -p app/src/main/res/mipmap-$n
+            $IM icon-src.png -resize ${s}x${s} app/src/main/res/mipmap-$n/ic_launcher.png
+          done
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
