@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Duel Legend</title>
+<style>
+:root{--bg:#0d0a1f;--pn:#1a1238;--pn2:#251a4f;--gold:#d9a93a;--gd:#7a5c18;--ink:#f3e9c8;--red:#d6453a;--blue:#3b82f6}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:Palatino,"Palatino Linotype",Georgia,serif}
+.scr{position:fixed;inset:0;display:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.scr.on{display:flex}
+button{font:inherit;color:var(--ink);background:linear-gradient(#2c2060,#1a1238);border:1.5px solid var(--gold);border-radius:6px;padding:1.4vh 2vh;font-size:2.6vh}
+button:active{background:var(--gd)}
+#home{flex-direction:column;align-items:center;justify-content:center;gap:1.6vh;background:radial-gradient(circle at 50% 40%,#3a2370,#0d0a1f 70%)}
+#home h1{font-size:8vh;letter-spacing:.3vh;color:var(--gold);text-shadow:0 0 3vh #a06bff,0 .4vh 0 #000;font-weight:700}
+#home h2{font-size:2.8vh;font-weight:400;margin-bottom:1vh;opacity:.8}
+#home .g{display:grid;grid-template-columns:1fr 1fr;gap:1.4vh}#home button{width:34vh;font-size:3vh}
+#talk,#story{flex-direction:column;align-items:center;justify-content:center;gap:1.4vh;background:radial-gradient(circle at 50% 30%,#2e1f5c,#0d0a1f 75%)}
+#talk{justify-content:flex-end;padding-bottom:6vh}#tn{font-size:4vh;color:var(--gold);font-weight:700}
+#tt{font-size:3.6vh;line-height:1.35;max-width:80vw;background:rgba(0,0,0,.6);border:2px solid var(--gold);border-radius:8px;padding:3vh 4vh;min-height:20vh;text-align:left}
+#tl{display:grid;grid-template-columns:1fr 1fr;gap:1.2vh}#tl button{width:44vh;font-size:2.6vh;text-align:left}
+#st{font-size:2.4vh;min-height:3vh;color:#cdb8ff}
+/* side detail panel */
+.side{width:27vw;min-width:200px;background:var(--pn);border-right:2px solid var(--gd);display:flex;flex-direction:column;padding:1vh;gap:.8vh;overflow:hidden}
+.side img.big{width:auto;max-width:100%;height:36vh;object-fit:contain;align-self:center;border-radius:3px}
+.side .nm{font-size:2.9vh;font-weight:700;color:var(--gold)}
+.side .tp{font-size:2.2vh;opacity:.8}
+.side .ds{font-size:2.2vh;line-height:1.25;overflow:auto;flex:1}
+.lp{display:flex;align-items:center;gap:1vh;font-size:4.4vh;font-weight:700;letter-spacing:.2vh}
+.bar{flex:1;height:1.8vh;background:#000;border:1px solid var(--gd);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#e0a42c,#2fa78c);width:100%;transition:width .5s}
+/* duel */
+#duel{flex-direction:row}
+#field{flex:1;display:flex;flex-direction:column;justify-content:space-evenly;align-items:center;padding:.6vh;
+ background:radial-gradient(ellipse at center,#33215f 0,#150f30 80%);position:relative}
+.row{display:flex;gap:1.2vh;justify-content:center}
+.z{width:12.4vh;height:17.4vh;border:1.5px solid var(--gd);border-radius:4px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03)}
+.z.m1,.z.m0{height:17.4vh}
+.z.tgt{border-color:var(--red);box-shadow:0 0 2vh var(--red);background:rgba(214,69,58,.18)}
+.c{position:relative;height:16.2vh;width:11.1vh;border-radius:3px;overflow:hidden;background:#000;flex:none;transition:transform .2s}
+.c img{width:100%;height:100%;object-fit:cover;display:block}
+.c i{position:absolute;bottom:0;right:0;background:rgba(0,0,0,.75);font:700 1.9vh/1 sans-serif;padding:.3vh .6vh;color:#fff;font-style:normal}
+.c.def{transform:rotate(90deg) scale(.82)}
+.c.back{background:radial-gradient(circle,#8a4b1c 0,#4a2410 45%,#1d0f08 100%);border:.4vh solid #c9a35a}
+.c.mfd{outline:.4vh dashed #8cc3ff}.c.mfd img{opacity:.55}
+.c.sel{outline:.5vh solid var(--gold)}
+.hand{display:flex;gap:1vh;overflow-x:auto;width:100%;justify-content:center;padding:.4vh}
+.hand .c{height:21vh;width:14.4vh}
+#top{position:absolute;top:.5vh;right:1vh;font-size:2.2vh;opacity:.9;text-align:right}
+#log{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);background:rgba(0,0,0,.82);border:1.5px solid var(--gold);padding:1.2vh 3vh;font-size:3vh;border-radius:6px;display:none;pointer-events:none;z-index:5;text-align:center}
+#amenu{position:absolute;left:50%;bottom:23vh;transform:translateX(-50%);display:none;gap:1.2vh;z-index:6}
+#amenu.on{display:flex}
+#amenu button{font-size:3.2vh;padding:1.6vh 3vh;background:linear-gradient(#5a3fb8,#2c2060)}
+.ctl{display:flex;gap:1vh}.ctl button{flex:1;font-size:2.4vh;padding:1.1vh .5vh}
+#over{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;flex-direction:column;gap:3vh;z-index:9;font-size:9vh;color:var(--gold)}
+/* cards screen */
+#cards{flex-direction:row}
+#cmain{flex:1;display:flex;flex-direction:column;min-width:0}
+#cbar{display:flex;gap:.8vh;padding:.8vh;flex-wrap:wrap;background:var(--pn2);align-items:center}
+#cbar input,#cbar select{font:inherit;font-size:2.4vh;padding:1vh;border-radius:6px;border:1.5px solid var(--gd);background:#0d0a1f;color:var(--ink);width:24vh}
+#cbar button{font-size:2.3vh;padding:1vh 1.5vh}
+#grid{flex:1;overflow-y:auto;display:flex;flex-wrap:wrap;gap:1vh;padding:1vh;align-content:flex-start;justify-content:center}
+#grid .c{height:21vh;width:14.4vh}
+.cnt{position:absolute;top:0;left:0;background:var(--gold);color:#000;font:700 2vh sans-serif;padding:.2vh .7vh}
+</style></head><body>
+
+<div id="home" class="scr on">
+  <h1>Duel Legend</h1><h2>Dokun, çağır, saldır.</h2>
+  <div class="g">
+  <button onclick="openStory()">Hikaye</button>
+  <button onclick="startDuel()">Serbest Düello</button>
+  <button onclick="openCards('deck')">Deste Hazırla</button>
+  <button onclick="openCards('list')">Kart Listesi</button>
+  <button id="bSnd" onclick="toggleSnd()"></button>
+  <button id="bMus" onclick="toggleMus()"></button>
+  </div>
+  <button id="bEra" style="width:69vh" onclick="toggleEra()"></button>
+  <div id="st"></div>
+</div>
+
+<div id="story" class="scr"><h2 style="font-size:5vh;color:var(--gold)">Altın Arena</h2><div id="tl"></div><button onclick="show('home')">Geri</button></div>
+<div id="talk" class="scr"><div id="tn"></div><div id="tt"></div><div style="font-size:2.2vh;opacity:.7">Devam etmek için dokun</div></div>
+
+<div id="duel" class="scr">
+  <aside class="side">
+    <div class="lp"><span id="lp1">8000</span><div class="bar"><i id="bar1"></i></div></div>
+    <img class="big" id="dimg" alt="">
+    <div class="nm" id="dnm"></div><div class="tp" id="dtp"></div><div class="ds" id="dds"></div>
+    <div class="ctl"><button id="bBattle">Savaş</button><button id="bEnd">Turu bitir</button></div>
+    <div class="lp"><span id="lp0">8000</span><div class="bar"><i id="bar0"></i></div></div>
+  </aside>
+  <div id="field"><div id="top"></div><div id="rows"></div><div id="log"></div><div id="amenu"></div></div>
+  <div id="over"><div id="ovt"></div><button id="ovb" onclick="afterDuel()">Ana menü</button></div>
+</div>
+
+<div id="cards" class="scr">
+  <aside class="side">
+    <img class="big" id="cimg" alt=""><div class="nm" id="cnm"></div><div class="tp" id="ctp"></div><div class="ds" id="cds"></div>
+    <div class="ctl" id="cact"></div>
+  </aside>
+  <div id="cmain">
+    <div id="cbar">
+      <button onclick="show('home')">Geri</button>
+      <input id="q" placeholder="Kart ara" oninput="CS.page=0;cardsRender()">
+      <select id="tf" onchange="CS.page=0;cardsRender()"><option value="all">Hepsi</option><option value="m">Canavar</option><option value="s">Büyü</option><option value="t">Tuzak</option></select>
+      <button id="tabP" onclick="CS.tab='pool';CS.page=0;cardsRender()">Tüm kartlar</button>
+      <button id="tabD" onclick="CS.tab='deck';CS.page=0;cardsRender()">Deste</button>
+      <button onclick="CS.page=Math.max(0,CS.page-1);cardsRender()">&lt;</button><span id="pg"></span>
+      <button onclick="CS.page++;cardsRender()">&gt;</button>
+      <button id="bRnd" onclick="DECK=randomDeck();saveDeck();cardsRender()">Rastgele</button>
+      <button id="bClr" onclick="DECK=[];saveDeck();cardsRender()">Temizle</button>
+    </div>
+    <div id="grid"></div>
+  </div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s), IMG='https://images.ygoprodeck.com/images/';
+const API='https://db.ygoprodeck.com/api/v7/cardinfo.php';
+let POOL=[],BYID={},DECK=JSON.parse(localStorage.getItem('deck')||'[]'),ALL=localStorage.getItem('all')==='1',G=null,SCR='home';
+const isM=c=>c.t.includes('Monster'),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const saveDeck=()=>localStorage.setItem('deck',JSON.stringify(DECK));
+function show(s){SCR=s;document.querySelectorAll('.scr').forEach(e=>e.classList.toggle('on',e.id===s))}
+window.goBack=()=>{if(SCR==='home')return false;if(SCR==='talk'||SCR==='duel'&&G&&G.story!=null)show('story');else show('home');$('#over').style.display='none';return true};
+/* ---- storage ---- */
+const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('ygo',1);r.onupgradeneeded=()=>r.result.createObjectStore('k');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+async function idbGet(k){try{const d=await idb();return await new Promise(r=>{const q=d.transaction('k').objectStore('k').get(k);q.onsuccess=()=>r(q.result);q.onerror=()=>r()})}catch(e){}}
+async function idbSet(k,v){try{const d=await idb();d.transaction('k','readwrite').objectStore('k').put(v,k)}catch(e){}}
+/* ---- card database: every card unlocked ---- */
+async function load(){
+  const key=ALL?'all':'classic';let data=await idbGet(key);
+  if(!data){
+    $('#st').textContent='Kart veritabanı indiriliyor…';
+    const r=await fetch(ALL?API:API+'?enddate=2006-12-31&dateregion=tcg_date');const j=await r.json();
+    data=j.data.filter(c=>c.type==='Spell Card'||c.type==='Trap Card'||(c.type.includes('Monster')&&!/Fusion|Synchro|XYZ|Link|Pendulum|Token|Ritual|Skill/.test(c.type)))
+      .map(c=>({id:c.id,n:c.name,t:c.type==='Spell Card'||c.type==='Trap Card'?c.type:'Monster '+c.type.replace(' Monster',''),d:c.desc,a:c.atk||0,f:c.def||0,l:c.level||0,r:c.race,at:c.attribute||''}));
+    await idbSet(key,data);
+  }
+  POOL=data;BYID=Object.fromEntries(POOL.map(c=>[c.id,c]));
+  $('#st').textContent=POOL.length+' kart açık';
+}
+function toggleEra(){ALL=!ALL;localStorage.setItem('all',ALL?'1':'0');init()}
+async function init(){
+  snd();
+  $('#bEra').textContent=ALL?'Kart havuzu: Tüm çağlar':'Kart havuzu: Klasik (2006\'ya kadar)';
+  try{await load()}catch(e){$('#st').textContent='İndirme başarısız. İnternet bağlantısını kontrol et ve tekrar dene.'}
+}
+/* ---- card info panel ---- */
+function info(c,p){
+  const P=p||'d';if(!c){$('#'+P+'img').removeAttribute('src');$('#'+P+'nm').textContent='';$('#'+P+'tp').textContent='';$('#'+P+'ds').textContent='';return}
+  $('#'+P+'img').src=IMG+'cards/'+c.id+'.jpg';$('#'+P+'nm').textContent=c.n;
+  $('#'+P+'tp').textContent=isM(c)?`${c.t} · ${c.r} · ${c.at} · ★${c.l} · ATK ${c.a} / DEF ${c.f}`:c.t;$('#'+P+'ds').textContent=c.d;
+}
+function cardEl(c,o={}){
+  if(o.fd&&!o.mine)return `<div class="c back ${o.def?'def':''}" ${o.a||''}></div>`;
+  return `<div class="c ${o.def?'def':''} ${o.fd?'mfd':''} ${o.cls||''}" ${o.a||''}><img loading="lazy" src="${IMG}cards_small/${c.id}.jpg" alt="">${isM(c)&&!o.hideStat?`<i>${o.def?c.f:c.a}</i>`:''}</div>`;
+}
+/* ---- deck / list screen ---- */
+const CS={mode:'list',tab:'pool',page:0,sel:null};
+function openCards(m){CS.mode=m;CS.tab=m==='deck'?'deck':'pool';CS.page=0;CS.sel=null;show('cards');cardsRender()}
+function cardsRender(){
+  const deckMode=CS.mode==='deck';$('#tabD').style.display=$('#bRnd').style.display=$('#bClr').style.display=deckMode?'':'none';
+  const q=$('#q').value.toLowerCase(),tf=$('#tf').value;
+  let src=CS.tab==='deck'?DECK.map(i=>BYID[i]).filter(Boolean):POOL;
+  src=src.filter(c=>(tf==='all'||(tf==='m'&&isM(c))||(tf==='s'&&c.t==='Spell Card')||(tf==='t'&&c.t==='Trap Card'))&&(!q||c.n.toLowerCase().includes(q)));
+  const per=40,pages=Math.max(1,Math.ceil(src.length/per));CS.page=Math.min(CS.page,pages-1);
+  $('#pg').textContent=`${CS.page+1}/${pages} · ${src.length} · Deste ${DECK.length}`;
+  $('#grid').innerHTML=src.slice(CS.page*per,CS.page*per+per).map(c=>{const n=DECK.filter(i=>i===c.id).length;return `<div style="position:relative" data-id="${c.id}">${cardEl(c,{hideStat:true})}${n&&CS.tab==='pool'?`<span class="cnt">${n}</span>`:''}</div>`}).join('')||'<p style="font-size:3vh;padding:3vh">Kart yok.</p>';
+  info(CS.sel,'c');
+  $('#cact').innerHTML=deckMode&&CS.sel?'<button onclick="addC()">+ Ekle</button><button onclick="remC()">− Çıkar</button>':'';
+}
+$('#grid').addEventListener('click',e=>{const d=e.target.closest('[data-id]');if(d){CS.sel=BYID[+d.dataset.id];cardsRender()}});
+function addC(){if(DECK.length>=60)return;if(DECK.filter(i=>i===CS.sel.id).length>=3)return;DECK.push(CS.sel.id);saveDeck();cardsRender()}
+function remC(){const i=DECK.indexOf(CS.sel.id);if(i>=0){DECK.splice(i,1);saveDeck();cardsRender()}}
+/* ---- card effects (implemented subset) ---- */
+const nonEmpty=a=>a.some(Boolean);
+const FX={
+ 'Pot of Greed':p=>{draw(p);draw(p)},
+ 'Dark Hole':()=>{[0,1].forEach(q=>G.mon[q].forEach((m,i)=>m&&destroy(q,i)))},
+ 'Raigeki':p=>{G.mon[1-p].forEach((m,i)=>m&&destroy(1-p,i))},
+ 'Heavy Storm':()=>{[0,1].forEach(q=>G.st[q].forEach((s,i)=>s&&destroyST(q,i)))},
+ 'Fissure':p=>{const q=1-p,l=G.mon[q].map((m,i)=>m&&!m.fd?i:-1).filter(i=>i>=0).sort((a,b)=>G.mon[q][a].c.a-G.mon[q][b].c.a);if(l.length)destroy(q,l[0])},
+ 'Mystical Space Typhoon':p=>{const q=1-p,l=G.st[q].map((s,i)=>s?i:-1).filter(i=>i>=0);if(l.length)destroyST(q,l[Math.random()*l.length|0])},
+ 'Monster Reborn':p=>{const z=G.mon[p].indexOf(null);let best=null,bq=0;[0,1].forEach(q=>G.gy[q].forEach(c=>{if(isM(c)&&(!best||c.a>best.a)){best=c;bq=q}}));if(best&&z>=0){G.gy[bq].splice(G.gy[bq].indexOf(best),1);G.mon[p][z]={c:best,fd:false,def:false,tn:G.tn,moved:true,att:false}}},
+ 'Dian Keto the Cure Master':p=>{G.lp[p]+=1000}
+};
+const TRAPS={
+ 'Trap Hole':(p,q,ai)=>G.mon[p][ai].c.a>=1000?(destroy(p,ai),'stop'):undefined,
+ 'Mirror Force':(p)=>{G.mon[p].forEach((m,i)=>m&&!m.def&&destroy(p,i));return 'stop'},
+ 'Magic Cylinder':(p,q,ai)=>{damage(p,G.mon[p][ai].c.a);return 'stop'},
+ 'Negate Attack':()=>'stop'
+};
+
+/* ---- sound (synthesized, no asset files) ---- */
+let AC=null,SOUND=localStorage.getItem('snd')!=='0',MUSIC=localStorage.getItem('mus')!=='0',mt=null,mi=0;
+function ac(){if(!AC){try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==='suspended')AC.resume();return AC}
+function tone(f,d,type,v,t0,f2){const a=ac();if(!a)return;const t=a.currentTime+(t0||0),o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(v||.12,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d)}
+function noise(d,v,t0){const a=ac();if(!a)return;const n=a.sampleRate*d|0,b=a.createBuffer(1,n,a.sampleRate),x=b.getChannelData(0);for(let i=0;i<n;i++)x[i]=(Math.random()*2-1)*(1-i/n);const s=a.createBufferSource(),g=a.createGain();s.buffer=b;g.gain.value=v||.2;s.connect(g);g.connect(a.destination);s.start(a.currentTime+(t0||0))}
+const SFX={click:()=>tone(660,.06,'square',.05),draw:()=>noise(.08,.12),
+ summon:()=>{tone(220,.3,'sawtooth',.1,0,440);tone(440,.3,'triangle',.1,.1,880)},set:()=>{tone(200,.12,'square',.08);tone(150,.12,'square',.08,.08)},
+ atk:()=>tone(900,.25,'sawtooth',.1,0,120),hit:()=>{noise(.25,.3);tone(90,.25,'square',.15)},boom:()=>{noise(.45,.3);tone(60,.45,'sawtooth',.2,0,30)},
+ spell:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.25,'sine',.09,i*.07)),trap:()=>{tone(300,.4,'sawtooth',.12,0,100);noise(.2,.15)},
+ win:()=>[523,659,784,1047,1319].forEach((f,i)=>tone(f,.4,'triangle',.12,i*.14)),lose:()=>[392,330,262,196].forEach((f,i)=>tone(f,.5,'sawtooth',.1,i*.25))};
+const sfx=n=>{if(SOUND){try{SFX[n]()}catch(e){}}};
+const SC=[220,261.6,293.7,329.6,392,440,523.3];
+function music(){clearInterval(mt);mt=null;if(!MUSIC||!ac())return;mt=setInterval(()=>{if(!MUSIC)return;if(mi%8===0)tone([110,110,98,87.3][(mi>>3)%4],1.6,'triangle',.06);tone(SC[(mi*3+(mi>>2))%7]*(mi%16<8?1:.5),.5,'sine',.035);mi++},330)}
+function snd(){$('#bSnd').textContent='Ses: '+(SOUND?'açık':'kapalı');$('#bMus').textContent='Müzik: '+(MUSIC?'açık':'kapalı')}
+function toggleSnd(){SOUND=!SOUND;localStorage.setItem('snd',SOUND?'1':'0');snd()}
+function toggleMus(){MUSIC=!MUSIC;localStorage.setItem('mus',MUSIC?'1':'0');snd();music()}
+document.addEventListener('pointerdown',()=>{ac();if(MUSIC&&!mt)music()});
+document.addEventListener('click',e=>{if(e.target.closest('button'))sfx('click')});
+/* ---- story: original characters and dialogue ---- */
+const STORY=[
+{n:'Kaan',t:'Çırak Düellocu',race:'Warrior',intro:['Altın Arena\'ya hoş geldin yabancı.','Şampiyonluk yolu sekiz düellodan geçer. İlki benim. Kartlarını çek!'],win:['Hım... Destende bir ruh var. Git, sıradaki rakibine.']},
+{n:'Selin',t:'Rün Büyücüsü',race:'Spellcaster',intro:['Kaan\'ı yenmişsin demek. Rünlerim bu işi daha zor bulacak.','Büyünün sırrını göstereyim.'],win:['Rünler yanıldı... Yoluna devam et.']},
+{n:'Demir',t:'Mekanik Usta',race:'Machine',intro:['Hesaplarım seni yüzde on şansla gösteriyor.','Dişlilerimin sesini dinle!'],win:['Hesap hatası... Bu ihtimali girmemiştim.']},
+{n:'Zehra',t:'Mezar Bekçisi',race:'Zombie',intro:['Mezarlıkta ölüler hiç bitmez.','Onları uyandırmadan önce vazgeçmek ister misin?'],win:['Ölüler bile seni tanıdı. Geç.']},
+{n:'Bora',t:'Orman Ruhu',race:'Beast',intro:['Ormanın kuralı basit: güçlü hayatta kalır.','Pençelerim hazır!'],win:['Orman seni kabul etti.']},
+{n:'Lilith',t:'Gölgelerin Hanımı',race:'Fiend',intro:['Işığın gölgesi uzun olur.','Karanlığın gücünü tatmaya hazır mısın?'],win:['Gölgeler bile çekildi... Etkileyici.']},
+{n:'Arda',t:'Ejder Lordu',race:'Dragon',intro:['Buraya kadar gelen az kişi var.','Ejderlerimin ateşi seni sınayacak!'],win:['Ejderler başını eğdi. Son rakip seni bekliyor.']},
+{n:'Nefer',t:'Arenanın Efendisi',race:null,intro:['Sonunda geldin. Altın Arena\'nın efendisiyim.','Bütün kartlar bana boyun eğer. Gör bakalım, sen neyi farklı yapıyorsun?'],win:['Ne kadar güçlü bir düello... Şampiyonluk senin.']}
+];
+const ENDING=['Nefer\'i yendin ve Altın Arena\'nın yeni şampiyonu oldun.','Ama düelloların sonu yok. Yeni bir deste kur, yeni rakipler seni bekliyor.'];
+let TALK=null;
+function talk(name,title,lines,cb){let i=0;show('talk');$('#tn').textContent=name+(title?' · '+title:'');TALK=()=>{if(i>=lines.length){TALK=null;cb();return}$('#tt').textContent=lines[i++]};TALK()}
+$('#talk').onclick=()=>{sfx('click');TALK&&TALK()};
+const cleared=()=>JSON.parse(localStorage.getItem('clr')||'[]');
+function openStory(){
+  if(!POOL.length){init();return}
+  const c=cleared();$('#tl').innerHTML=STORY.map((x,i)=>`<button data-s="${i}">${c.includes(i)?'✓ ':''}${i+1}. ${x.n} · ${x.t}</button>`).join('');show('story')}
+$('#tl').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(b)playStory(+b.dataset.s)});
+function playStory(i){const x=STORY[i];talk(x.n,x.t,x.intro,()=>startDuel({deck:themedDeck(x.race,i>=5),story:i,lp:8000+i*500}))}
+function afterDuel(){
+  $('#over').style.display='none';
+  if(!G||G.story==null){show('home');return}
+  const i=G.story,won=G.loser===1;
+  if(!won){show('story');return}
+  const c=cleared();if(!c.includes(i)){c.push(i);localStorage.setItem('clr',JSON.stringify(c))}
+  talk(STORY[i].n,STORY[i].t,STORY[i].win,()=>i===STORY.length-1?talk('Anlatıcı','',ENDING,()=>openStory()):openStory());
+}
+function themedDeck(race,strong){
+  const r=a=>a[Math.random()*a.length|0];
+  let m=POOL.filter(c=>isM(c)&&c.a>0&&(!race||c.r===race));if(m.length<12)m=POOL.filter(c=>isM(c)&&c.a>0);
+  if(strong){const s=m.filter(c=>c.a>=1500);if(s.length>=12)m=s}
+  const lo=m.filter(c=>c.l<=4),hi=m.filter(c=>c.l>=5&&c.l<=7),sp=POOL.filter(c=>FX[c.n]),tr=POOL.filter(c=>TRAPS[c.n]),d=[];
+  for(let i=0;i<18;i++)d.push(r(lo.length?lo:m));
+  for(let i=0;i<8;i++)d.push(r(hi.length?hi:m));
+  for(let i=0;i<8&&sp.length;i++)d.push(r(sp));
+  for(let i=0;i<6&&tr.length;i++)d.push(r(tr));
+  while(d.length<40)d.push(r(m));
+  return d;
+}
+/* ---- duel engine ---- */
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+function randomDeck(){const r=a=>a[Math.random()*a.length|0],m=POOL.filter(c=>isM(c)&&c.a>=0),s=POOL.filter(c=>FX[c.n]),t=POOL.filter(c=>TRAPS[c.n]),d=[];
+  for(let i=0;i<40;i++){d.push((i<26||!s.length&&!t.length?r(m):i<34&&s.length?r(s):t.length?r(t):r(m)).id)}return d}
+function startDuel(o){o=o||{};
+  if(!POOL.length){init();return}
+  let pd=DECK.map(i=>BYID[i]).filter(Boolean);if(pd.length<20)pd=randomDeck().map(i=>BYID[i]);
+  const E=()=>Array(5).fill(null);
+  const L=o.lp||8000;
+  G={story:o.story==null?null:o.story,max:[8000,L],loser:null,ended:false,lp:[8000,L],deck:[shuffle(pd.slice()),shuffle((o.deck||themedDeck(null,false)).slice())],hand:[[],[]],mon:[E(),E()],st:[E(),E()],gy:[[],[]],turn:0,tn:0,phase:'main',summoned:false,over:false,atkFrom:null};
+  for(let i=0;i<5;i++){draw(0);draw(1)}
+  $('#over').style.display='none';$('#ovb').textContent=G.story==null?'Ana menü':'Devam';show('duel');info(null);startTurn(0);
+}
+function msg(t){const l=$('#log');l.textContent=t;l.style.display='block';clearTimeout(msg.t);msg.t=setTimeout(()=>l.style.display='none',1800)}
+function draw(p){if(!G.deck[p].length){G.over=true;G.loser=p;return}G.hand[p].push(G.deck[p].pop());sfx('draw')}
+function startTurn(p){
+  G.turn=p;G.tn++;G.phase='main';G.summoned=false;G.atkFrom=null;
+  G.mon[p].forEach(m=>{if(m){m.moved=false;m.att=false}});
+  if(!(G.tn===1))draw(p);
+  render();msg(p===0?'Senin turun':'Rakibin turu');
+  if(G.over)return end();
+  if(p===1)aiTurn();
+}
+function endTurn(){if(G.over)return;const p=G.turn;while(G.hand[p].length>6)G.gy[p].push(G.hand[p].shift());startTurn(1-p)}
+function end(){if(G.ended)return;G.ended=true;render();const w=G.loser===1;sfx(w?'win':'lose');$('#ovt').textContent=w?'Kazandın!':'Kaybettin';$('#over').style.display='flex'}
+function damage(q,n){if(n>0)sfx('hit');G.lp[q]=Math.max(0,G.lp[q]-n);if(G.lp[q]<=0){G.over=true;G.loser=q}}
+function destroy(q,i){const m=G.mon[q][i];if(m){sfx('boom');G.gy[q].push(m.c);G.mon[q][i]=null}}
+function destroyST(q,i){const s=G.st[q][i];if(s){G.gy[q].push(s.c);G.st[q][i]=null}}
+const need=c=>c.l>=7?2:c.l>=5?1:0;
+function canSummon(p,c){const n=need(c),mc=G.mon[p].filter(Boolean).length,free=5-mc;return !G.summoned&&mc>=n&&free+n>=1}
+function summon(p,c,set){
+  if(G.summoned)return msg('Bu tur zaten canavar çağırdın');
+  if(!canSummon(p,c))return msg(need(c)&&G.mon[p].filter(Boolean).length<need(c)?'Yeterli tribute yok':'Canavar alanı dolu');
+  let n=set?(need(c)):need(c);
+  const ids=G.mon[p].map((m,i)=>m?i:-1).filter(i=>i>=0).sort((a,b)=>G.mon[p][a].c.a-G.mon[p][b].c.a);
+  for(let k=0;k<n;k++)destroy(p,ids[k]);
+  const z=G.mon[p].indexOf(null);G.hand[p].splice(G.hand[p].indexOf(c),1);
+  G.mon[p][z]={c,fd:!!set,def:!!set,tn:G.tn,moved:true,att:false};G.summoned=true;sfx(set?'set':'summon');
+}
+function setST(p,c){const z=G.st[p].indexOf(null);if(z<0)return msg('Büyü/Tuzak alanı dolu');G.hand[p].splice(G.hand[p].indexOf(c),1);G.st[p][z]={c,fd:true,tn:G.tn};sfx('set')}
+function useSpell(p,c,fromField){
+  if(!fromField)G.hand[p].splice(G.hand[p].indexOf(c),1);
+  const f=FX[c.n];G.gy[p].push(c);sfx('spell');
+  if(f){f(p);msg(c.n)}else msg(c.n+': etki henüz yok');
+  }
+function attack(p,ai,ti){
+  const q=1-p,a=G.mon[p][ai];a.att=true;G.atkFrom=null;sfx('atk');
+  for(let i=0;i<5;i++){const s=G.st[q][i];
+    if(s&&G.tn>s.tn&&TRAPS[s.c.n]){const r=TRAPS[s.c.n](p,q,ai);if(r!==undefined){destroyST(q,i);sfx('trap');msg(s.c.n+'!');if(r==='stop'||!G.mon[p][ai])return;break}}}
+  if(ti<0)damage(q,a.c.a);
+  else{const d=G.mon[q][ti];d.fd=false;
+    if(!d.def){const x=a.c.a-d.c.a;if(x>0){destroy(q,ti);damage(q,x)}else if(x<0){destroy(p,ai);damage(p,-x)}else{destroy(q,ti);destroy(p,ai)}}
+    else{const x=a.c.a-d.c.f;if(x>0)destroy(q,ti);else if(x<0)damage(p,-x)}}
+}
+/* ---- AI ---- */
+async function aiTurn(){
+  const p=1,q=0,pw=s=>G.mon[s].reduce((t,m)=>t+(m?m.c.a:0),0);
+  await sleep(800);
+  for(const c of [...G.hand[p]]){if(G.over)break;if(c.t!=='Spell Card'||!FX[c.n])continue;
+    if(c.n==='Dark Hole'&&pw(q)<=pw(p)+500)continue;
+    if((c.n==='Raigeki'||c.n==='Fissure')&&!nonEmpty(G.mon[q]))continue;
+    if(c.n==='Monster Reborn'&&!G.gy[0].concat(G.gy[1]).some(isM))continue;
+    if((c.n==='Mystical Space Typhoon'||c.n==='Heavy Storm')&&!nonEmpty(G.st[q]))continue;
+    useSpell(p,c);render();await sleep(700)}
+  const cand=G.hand[p].filter(c=>isM(c)&&canSummon(p,c)).sort((a,b)=>b.a-a.a)[0];
+  if(cand&&!G.over){const top=Math.max(0,...G.mon[q].filter(m=>m&&!m.fd).map(m=>m.c.a));summon(p,cand,cand.a<top&&cand.f>=cand.a);render();await sleep(700)}
+  for(const c of [...G.hand[p]]){if(isM(c)||G.st[p].filter(Boolean).length>=3)continue;if(c.t==='Trap Card'||!FX[c.n]){setST(p,c);render();await sleep(300)}}
+  if(G.tn>1)for(let i=0;i<5&&!G.over;i++){const m=G.mon[p][i];if(!m||m.def||m.fd||m.att)continue;
+    const ts=G.mon[q].map((t,j)=>t?{j,v:t.def?t.c.f:t.c.a,d:t.def}:null).filter(Boolean);
+    if(!ts.length){attack(p,i,-1)}
+    else{const ok=ts.filter(t=>t.v<m.c.a).sort((a,b)=>b.v-a.v)[0];if(!ok)continue;attack(p,i,ok.j)}
+    msg('Rakip saldırdı');render();await sleep(900)}
+  if(G.over)return end();
+  endTurn();
+}
+/* ---- player UI ---- */
+let SEL=null;
+function menu(b){const m=$('#amenu');m.innerHTML='';b.forEach(([l,f])=>{const e=document.createElement('button');e.textContent=l;e.onclick=ev=>{ev.stopPropagation();m.classList.remove('on');f();SEL=null;render();if(G.over)end()};m.appendChild(e)});m.classList.toggle('on',b.length>0)}
+function mine(){return G&&!G.over&&G.turn===0}
+function onHand(i){
+  const c=G.hand[0][i];info(c);SEL=i;const b=[];
+  if(mine()&&G.phase==='main'){
+    if(isM(c)){b.push(['Çağır',()=>summon(0,c,false)],['Kapalı koy',()=>summon(0,c,true)])}
+    else if(c.t==='Spell Card')b.push(['Aktif et',()=>useSpell(0,c)],['Kapalı koy',()=>setST(0,c)]);
+    else b.push(['Kapalı koy',()=>setST(0,c)]);
+  }
+  render();menu(b);
+}
+function onMon(side,i){
+  const m=G.mon[side][i];
+  if(G.atkFrom!=null&&side===1&&m){const a=G.atkFrom;attack(0,a,i);render();if(G.over)end();return}
+  if(!m)return;if(side===0||!m.fd)info(m.c);else info(null);
+  const b=[];
+  if(mine()&&side===0){
+    if(G.phase==='battle'&&!m.def&&!m.fd&&!m.att){
+      if(G.tn<=1)b.push(['İlk turda saldırı yok',()=>{}]);
+      else b.push(['Saldır',()=>{if(!nonEmpty(G.mon[1]))attack(0,i,-1);else{G.atkFrom=i;msg('Hedef seç')}}]);
+    }
+    if(G.phase==='main'){
+      if(m.fd&&m.tn<G.tn&&!m.moved)b.push(['Aç (Flip)',()=>{m.fd=false;m.def=false;m.moved=true}]);
+      else if(!m.fd&&!m.moved&&m.tn<G.tn)b.push([m.def?'Saldırı pozisyonu':'Savunma pozisyonu',()=>{m.def=!m.def;m.moved=true}]);
+    }
+  }
+  render();menu(b);
+}
+function onST(side,i){
+  const s=G.st[side][i];if(!s)return;if(side===0||!s.fd)info(s.c);else info(null);
+  const b=[];if(mine()&&side===0&&G.phase==='main'&&s.c.t==='Spell Card')b.push(['Aktif et',()=>{G.st[0][i]=null;useSpell(0,s.c,true)}]);
+  render();menu(b);
+}
+$('#duel').addEventListener('click',e=>{
+  if(!G||e.target.closest('#amenu')||e.target.closest('.side')||e.target.closest('#over'))return;
+  const z=e.target.closest('[data-z]'),h=e.target.closest('[data-h]');
+  $('#amenu').classList.remove('on');
+  if(h)onHand(+h.dataset.h);else if(z){const k=z.dataset.z;if(k[0]==='m')onMon(+k[1],+z.dataset.i);else onST(+k[1],+z.dataset.i)}
+  else{G.atkFrom=null;SEL=null;render()}
+});
+$('#bBattle').onclick=()=>{if(mine()&&G.phase==='main'){G.phase='battle';msg(G.tn<=1?'Battle Phase (ilk turda saldırı yok)':'Battle Phase');render()}};
+$('#bEnd').onclick=()=>{if(mine()){$('#amenu').classList.remove('on');endTurn()}};
+function render(){
+  if(!G)return;
+  $('#lp0').textContent=G.lp[0];$('#lp1').textContent=G.lp[1];
+  $('#bar0').style.width=Math.min(100,G.lp[0]/G.max[0]*100)+'%';$('#bar1').style.width=Math.min(100,G.lp[1]/G.max[1]*100)+'%';
+  $('#top').textContent=`Tur ${G.tn} · ${G.phase==='main'?'Ana faz':'Savaş fazı'} · Rakip eli ${G.hand[1].length} · Deste ${G.deck[0].length}/${G.deck[1].length} · Mezarlık ${G.gy[0].length}/${G.gy[1].length}`;
+  const row=(side,kind)=>`<div class="row">`+G[kind==='m'?'mon':'st'][side].map((x,i)=>{
+    let inner='',cls='';
+    if(x){const own=side===0;inner=cardEl(x.c,{fd:x.fd,def:x.def,mine:own,cls:kind==='m'&&side===0&&G.atkFrom===i?'sel':''});
+      if(kind==='m'&&side===1&&G.atkFrom!=null)cls='tgt'}
+    return `<div class="z ${cls}" data-z="${kind}${side}" data-i="${i}">${inner}</div>`}).join('')+`</div>`;
+  const hand=`<div class="hand">`+G.hand[0].map((c,i)=>cardEl(c,{a:`data-h="${i}"`,cls:SEL===i?'sel':''})).join('')+`</div>`;
+  $('#rows').innerHTML=row(1,'s')+row(1,'m')+row(0,'m')+row(0,'s')+hand;
+}
+$('#rows').style.cssText='display:flex;flex-direction:column;justify-content:space-evenly;align-items:center;width:100%;height:100%;gap:.4vh';
+init();
+</script></body></html>
