@@ -10,12 +10,27 @@ jobs:
       - uses: actions/checkout@v4
       - name: Make app icon
         run: |
-          if [ -f icon.png ]; then cp icon.png icon-src.png; else base64 -d icon.b64 > icon-src.png; fi
-          IM=$(command -v magick || command -v convert)
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq imagemagick
+          IM=convert
+          if command -v magick >/dev/null 2>&1; then IM=magick; fi
+          ls -la
+          SRC=""
+          if [ -f icon.png ]; then SRC=icon.png
+          elif [ -f icon.jpg ]; then SRC=icon.jpg
+          elif [ -f icon.b64 ]; then
+            if base64 -d icon.b64 > icon-src.img 2>/dev/null; then SRC=icon-src.img; fi
+          fi
+          echo "Icon source: ${SRC:-none (using default color icon)}"
           for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
             n=${d%%:*}; s=${d##*:}
+            out=app/src/main/res/mipmap-$n/ic_launcher.png
             mkdir -p app/src/main/res/mipmap-$n
-            $IM icon-src.png -resize ${s}x${s} app/src/main/res/mipmap-$n/ic_launcher.png
+            if [ -n "$SRC" ] && $IM "$SRC" -resize ${s}x${s} "$out"; then
+              :
+            else
+              $IM -size ${s}x${s} xc:'#2c2060' "$out"
+            fi
           done
       - uses: actions/setup-java@v4
         with:
