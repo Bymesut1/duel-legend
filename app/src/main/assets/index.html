@@ -20,9 +20,10 @@ button:active{background:var(--gd)}
 #tl{display:grid;grid-template-columns:1fr 1fr;gap:1.2vh}#tl button{width:44vh;font-size:2.6vh;text-align:left}
 #st{font-size:2.4vh;min-height:3vh;color:#cdb8ff}
 /* side detail panel */
-.side{width:27vw;min-width:200px;background:var(--pn);border-right:2px solid var(--gd);display:flex;flex-direction:column;padding:1vh;gap:.8vh;overflow:hidden}
-.side img.big{width:auto;max-width:100%;height:36vh;object-fit:contain;align-self:center;border-radius:3px}
-.side .nm{font-size:2.9vh;font-weight:700;color:var(--gold)}
+.side{width:31vw;min-width:220px;background:var(--pn);border-right:2px solid var(--gd);display:flex;flex-direction:column;padding:1vh;gap:.8vh;overflow:hidden}
+.side img.big{width:auto;max-width:100%;height:50vh;object-fit:contain;align-self:center;border-radius:3px}
+.side .nm{font-size:2.8vh;font-weight:700;color:var(--gold)}.side .nm small{font-size:1.7vh;opacity:.65;font-weight:400}
+#zoom{position:fixed;inset:0;background:rgba(0,0,0,.93);display:none;align-items:center;justify-content:center;z-index:30}#zoom img{height:94vh;max-width:96vw;object-fit:contain}
 .side .tp{font-size:2.2vh;opacity:.8}
 .side .ds{font-size:2.2vh;line-height:1.25;overflow:auto;flex:1}
 .lp{display:flex;align-items:center;gap:1vh;font-size:4.4vh;font-weight:700;letter-spacing:.2vh}
@@ -117,7 +118,7 @@ button:active{background:var(--gd)}
   </div>
 </div>
 
-<div id="pick"></div>
+<div id="pick"></div><div id="zoom"></div>
 <script>
 const $=s=>document.querySelector(s), IMG='https://images.ygoprodeck.com/images/';
 const API='https://db.ygoprodeck.com/api/v7/cardinfo.php';
@@ -125,7 +126,7 @@ let POOL=[],BYID={},DECK=JSON.parse(localStorage.getItem('deck')||'[]'),ALL=loca
 const isM=c=>c.t.includes('Monster'),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const saveDeck=()=>localStorage.setItem('deck',JSON.stringify(DECK));
 function show(s){SCR=s;document.querySelectorAll('.scr').forEach(e=>e.classList.toggle('on',e.id===s))}
-window.goBack=()=>{if(SCR==='home')return false;if(SCR==='talk'||SCR==='duel'&&G&&G.story!=null)show('story');else show('home');$('#over').style.display='none';return true};
+window.goBack=()=>{if($('#zoom').style.display==='flex'){$('#zoom').style.display='none';return true}if(SCR==='home')return false;if(SCR==='talk'||SCR==='duel'&&G&&G.story!=null)show('story');else show('home');$('#over').style.display='none';return true};
 /* ---- storage ---- */
 const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('ygo',1);r.onupgradeneeded=()=>r.result.createObjectStore('k');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 async function idbGet(k){try{const d=await idb();return await new Promise(r=>{const q=d.transaction('k').objectStore('k').get(k);q.onsuccess=()=>r(q.result);q.onerror=()=>r()})}catch(e){}}
@@ -150,11 +151,23 @@ async function init(){
   try{await load()}catch(e){$('#st').textContent='İndirme başarısız. İnternet bağlantısını kontrol et ve tekrar dene.'}
 }
 /* ---- card info panel ---- */
+const TRR={Warrior:'Savaşçı',Spellcaster:'Büyücü',Dragon:'Ejderha',Zombie:'Zombi',Machine:'Makine',Beast:'Canavar',Fiend:'Şeytan',Fairy:'Peri',Insect:'Böcek',Dinosaur:'Dinozor',Reptile:'Sürüngen',Plant:'Bitki',Aqua:'Su',Fish:'Balık','Sea Serpent':'Deniz Yılanı',Thunder:'Yıldırım',Rock:'Kaya',Pyro:'Ateş','Winged Beast':'Kanatlı Canavar','Beast-Warrior':'Canavar-Savaşçı',Psychic:'Psişik','Divine-Beast':'İlahi Canavar',Wyrm:'Wyrm',Normal:'Normal',Equip:'Teçhizat',Continuous:'Sürekli','Quick-Play':'Hızlı',Field:'Alan',Ritual:'Ritüel',Counter:'Karşı'};
+const TRA={DARK:'KARANLIK',LIGHT:'IŞIK',EARTH:'TOPRAK',WATER:'SU',FIRE:'ATEŞ',WIND:'RÜZGAR',DIVINE:'İLAHİ'};
+const trType=c=>c.t==='Spell Card'?'Büyü Kartı · '+(TRR[c.r]||c.r):c.t==='Trap Card'?'Tuzak Kartı · '+(TRR[c.r]||c.r):'Canavar ('+c.t.replace('Monster ','').replace('Normal','Normal').replace('Effect','Efekt').replace('Flip','Flip').replace('Tuner','Tuner').replace('Union','Union').replace('Gemini','Gemini').replace('Spirit','Spirit').replace('Toon','Toon')+')';
+const TRC={},TOK={};
+async function trText(t){if(!t)return t;if(TRC[t])return TRC[t];const k='tr:'+t;let v=await idbGet(k);if(v){TRC[t]=v;return v}
+  try{const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q='+encodeURIComponent(t));const j=await r.json();v=j[0].map(x=>x[0]).join('');if(v){TRC[t]=v;idbSet(k,v)}return v||t}catch(e){return t}}
 function info(c,p){
-  const P=p||'d';if(!c){$('#'+P+'img').removeAttribute('src');$('#'+P+'nm').textContent='';$('#'+P+'tp').textContent='';$('#'+P+'ds').textContent='';return}
-  $('#'+P+'img').src=IMG+'cards/'+c.id+'.jpg';$('#'+P+'nm').textContent=c.n;
-  $('#'+P+'tp').textContent=isM(c)?`${c.t} · ${c.r} · ${c.at} · ★${c.l} · ATK ${c.a} / DEF ${c.f}`:c.t;$('#'+P+'ds').textContent=c.d;
+  const P=p||'d',tok=TOK[P]=(TOK[P]||0)+1;
+  if(!c){$('#'+P+'img').removeAttribute('src');$('#'+P+'nm').textContent='';$('#'+P+'tp').textContent='';$('#'+P+'ds').textContent='';return}
+  $('#'+P+'img').src=IMG+'cards/'+c.id+'.jpg';
+  const nm=$('#'+P+'nm');nm.textContent=c.n;
+  $('#'+P+'tp').textContent=isM(c)?`${trType(c)} · ${TRR[c.r]||c.r} · ${TRA[c.at]||c.at} · ★${c.l} · ATK ${c.a} / DEF ${c.f}`:trType(c);
+  $('#'+P+'ds').textContent='Çevriliyor…';
+  trText(c.n).then(v=>{if(TOK[P]!==tok)return;nm.textContent=v;const sm=document.createElement('small');sm.textContent=' ('+c.n+')';nm.appendChild(sm)});
+  trText(c.d.replace(/\s+/g,' ')).then(v=>{if(TOK[P]===tok)$('#'+P+'ds').textContent=v});
 }
+document.addEventListener('click',e=>{const im=e.target.closest('img.big');if(im&&im.getAttribute('src')){$('#zoom').innerHTML='<img src="'+im.src+'">';$('#zoom').style.display='flex'}else if(e.target.closest('#zoom'))$('#zoom').style.display='none'});
 function cardEl(c,o={}){
   if(o.fd&&!o.mine)return `<div class="c back ${o.def?'def':''}" ${o.a||''}></div>`;
   return `<div class="c ${o.def?'def':''} ${o.fd?'mfd':''} ${o.cls||''}" ${o.a||''}><img loading="lazy" src="${IMG}cards_small/${c.id}.jpg" alt="">${isM(c)&&!o.hideStat?`<i>${o.v!=null?o.v:(o.def?c.f:c.a)}</i>`:''}</div>`;
@@ -378,7 +391,8 @@ async function useSpell(p,c,fromField){
     G.st[p][z]={c,fd:false,tn:G.tn};x.zone={q:p,i:z};
   }else G.gy[p].push(c);
   render();
-  if(!o.ops.length){if(!['Continuous','Field'].includes(c.r))msg(c.n+': etki desteklenmiyor');return}
+  if(c.r==='Continuous'||c.r==='Field'){msg(c.n+' sahada');return}
+  if(!o.ops.length){msg(c.n+': etki desteklenmiyor');return}
   msg(c.n);for(const f of o.ops)await f(x);render();
 }
 async function attack(p,ai,ti){
@@ -395,7 +409,10 @@ async function attack(p,ai,ti){
   if(dd)await runMon(q,d.c,ti,'des');if(ad)await runMon(p,a.c,ai,'des');
 }
 /* ---- AI ---- */
-async function aiTurn(){
+async function aiTurn(){try{await aiTurnRun()}catch(e){console.error(e);msg('Hata: '+(e&&e.message||e))}
+  if(G&&G.over)return end();
+  if(G&&G.turn===1){await sleep(400);endTurn()}}
+async function aiTurnRun(){
   const p=1,q=0,pw=s=>G.mon[s].reduce((t,m)=>t+(m?A(m):0),0);
   await sleep(800);
   for(const c of [...G.hand[p]]){if(G.over)break;if(c.t!=='Spell Card')continue;const o=opsOf(c),L=c.d.toLowerCase();
@@ -420,7 +437,7 @@ async function aiTurn(){
 }
 /* ---- player UI ---- */
 let SEL=null;
-function menu(b){const m=$('#amenu');m.innerHTML='';b.forEach(([l,f])=>{const e=document.createElement('button');e.textContent=l;e.onclick=async ev=>{ev.stopPropagation();m.classList.remove('on');await f();SEL=null;render();if(G.over)end()};m.appendChild(e)});m.classList.toggle('on',b.length>0)}
+function menu(b){const m=$('#amenu');m.innerHTML='';b.forEach(([l,f])=>{const e=document.createElement('button');e.textContent=l;e.onclick=async ev=>{ev.stopPropagation();m.classList.remove('on');try{await f()}catch(err){console.error(err);msg('Hata: '+err.message)}SEL=null;render();if(G.over)end()};m.appendChild(e)});m.classList.toggle('on',b.length>0)}
 function mine(){return G&&!G.over&&G.turn===0}
 function onHand(i){
   const c=G.hand[0][i];info(c);SEL=i;const b=[];
@@ -468,7 +485,7 @@ $('#duel').addEventListener('click',e=>{
 $('#bBattle').onclick=()=>{if(mine()&&G.phase==='main'){G.phase='battle';msg(G.tn<=1?'Battle Phase (ilk turda saldırı yok)':'Battle Phase');render()}};
 $('#bEnd').onclick=()=>{if(mine()){$('#amenu').classList.remove('on');endTurn()}};
 function render(){
-  if(!G)return;
+  if(!G)return;G.act=Date.now();
   $('#lp0').textContent=G.lp[0];$('#lp1').textContent=G.lp[1];
   $('#bar0').style.width=Math.min(100,G.lp[0]/G.max[0]*100)+'%';$('#bar1').style.width=Math.min(100,G.lp[1]/G.max[1]*100)+'%';
   $('#top').innerHTML=`<span>Tur ${G.tn} · ${G.phase==='main'?'Ana faz':'Savaş fazı'} · Deste ${G.deck[0].length}/${G.deck[1].length}</span><button onclick="viewGY(0)">Mezarlığım (${G.gy[0].length})</button><button onclick="viewGY(1)">Rakip mezarlığı (${G.gy[1].length})</button>`;
@@ -481,6 +498,8 @@ function render(){
   const hand=`<div class="hand">`+G.hand[0].map((c,i)=>cardEl(c,{a:`data-h="${i}"`,cls:SEL===i?'sel':''})).join('')+`</div>`;
   $('#rows').innerHTML=oh+row(1,'s')+row(1,'m')+row(0,'m')+row(0,'s')+hand;
 }
+setInterval(()=>{if(G&&!G.over&&G.turn===1&&$('#pick').style.display!=='flex'&&Date.now()-(G.act||0)>20000){G.act=Date.now();msg('Rakip turu takıldı, devam ediliyor');endTurn()}},3000);
+window.addEventListener('unhandledrejection',e=>{console.error(e.reason);msg('Hata: '+(e.reason&&e.reason.message||e.reason))});
 $('#rows').style.cssText='display:flex;flex-direction:column;justify-content:space-evenly;align-items:center;width:100%;height:100%;gap:.4vh';
 init();
 </script></body></html>
