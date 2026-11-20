@@ -206,6 +206,21 @@ function pickUI(title,items,opt,view){return new Promise(res=>{const o=$('#pick'
   o.innerHTML=`<div class="pt">${title}</div><div class="pl">${items.map((x,i)=>`<div class="pi" data-k="${i}">${x.c?cardEl(x.c):'<div class="c back"></div>'}<small>${x.l||''}</small></div>`).join('')||'<div class="pt">Boş</div>'}</div>${opt||view?`<button id="pc">${view?'Kapat':'Vazgeç'}</button>`:''}`;
   o.style.display='flex';
   o.onclick=e=>{if(e.target.closest('#pc')){o.style.display='none';res(-1)}else{const b=e.target.closest('.pi');if(b&&!view){o.style.display='none';res(+b.dataset.k)}}}})}
+/* generic button dialog (confirmations, coin calls). returns index of the pressed button */
+function buttonsUI(title,desc,labels,c){return new Promise(res=>{const o=$('#pick');o.innerHTML='';o.onclick=null;
+  const t=document.createElement('div');t.className='pt';t.textContent=title;o.appendChild(t);
+  if(c){const w=document.createElement('div');w.className='pi';w.innerHTML=cardEl(c);o.appendChild(w)}
+  if(desc){const d=document.createElement('div');d.style.cssText='font-size:2.6vh;max-width:80vw;text-align:center;line-height:1.3;max-height:30vh;overflow:auto';d.textContent=desc;o.appendChild(d)}
+  const r=document.createElement('div');r.className='pl';
+  labels.forEach((l,i)=>{const b=document.createElement('button');b.textContent=l;b.onclick=()=>{o.style.display='none';res(i)};r.appendChild(b)});
+  o.appendChild(r);o.style.display='flex'})}
+/* optional ("you can ...") effect: show the card text and wait for the player's answer. AI always accepts */
+async function ask(p,c,body){if(p===1)return true;
+  const [n,t]=await Promise.all([trText(c.n),trText((body||c.d).replace(/\s+/g,' '))]);
+  return (await buttonsUI(n+' — etki uygulansın mı?',t,['Evet, uygula','Hayır'],c))===0}
+/* coin toss: 0 = Yazı (heads), 1 = Tura (tails) */
+async function coinCall(p){return p===1?(Math.random()<.5?0:1):await buttonsUI('Yazı mı, tura mı?','Tahmin et',['Yazı','Tura'])}
+async function tossCoin(){const r=Math.random()<.5?0:1;msg('Para: '+(r?'Tura':'Yazı'));sfx('spell');await sleep(1100);return r}
 async function choose(p,title,items,opt){if(!items.length)return -1;if(p===1)return items.reduce((b,x,i)=>(x.v||0)>(items[b].v||0)?i:b,0);if(items.length===1&&!opt)return 0;return pickUI(title,items,opt)}
 const viewGY=q=>pickUI(q?'Rakip mezarlığı':'Mezarlığım',G.gy[q].map(c=>({c,l:c.n})),false,true);
 function trigOf(c){const L=c.d.toLowerCase();if(c.t!=='Trap Card')return 'free';
@@ -218,17 +233,44 @@ function mtrig(c){const L=c.d.toLowerCase();if(/^flip:/.test(L))return 'flip';
   if(/when this card is (?:normal|flip|normal or flip) summoned|when this card is summoned/.test(L))return 'sum';
   if(/when this card is destroyed by battle/.test(L))return 'des';
   if(/once per turn|(?:^|[.:] )you can /.test(L))return 'ign';return null}
-function opsOf(c){if(c.__o)return c.__o;const d=c.d.replace(/\s+/g,' ').replace(/(?:if|when) this card (?:is sent|leaves|is destroyed)[^.]*\./gi,''),L=d.toLowerCase(),ops=[],o=c.__o={ops,sweep:false,trig:trigOf(c)};
+/* coin toss cards: heads/tails or call right/wrong branches, each branch is parsed by the same engine */
+function coinOps(c,d,L,o){
+  const add=f=>o.ops.push(f),mn=L.match(/(?:toss|flip) (\d+|two|three|a) coins?/);
+  if(mn&&/number of heads/.test(L)){const n=({a:1,two:2,three:3})[mn[1]]||+mn[1];
+    add(async x=>{let h=0;for(let i=0;i<n;i++)if((await tossCoin())===0)h++;msg(h+' yazı');await sleep(800);
+      for(let k=0;k<h;k++){
+        const it=[...MON(1-x.p),...MON(x.p).filter(t=>t.m.c!==x.c)].map(t=>{const hd=t.m.fd&&t.q!==x.p;return{c:hd?null:t.m.c,l:hd?'Kapalı canavar':t.m.c.n,v:t.q!==x.p?A(t.m):-1,t}});
+        if(!it.length)break;const kk=await choose(x.p,'Yok edilecek canavarı seç ('+(k+1)+'/'+h+')',it,true);if(kk<0)break;destroy(it[kk].t.q,it[kk].t.i)}});
+    return}
+  const rw=[/call(?:ed)? it (?:right|correctly)/,/call(?:ed)? it (?:wrong|incorrectly)/],ht=[/heads/,/tails/];
+  const callRW=rw[0].test(L)&&rw[1].test(L),pr=callRW?rw:ht;
+  const seg=(a,b)=>{const ia=L.search(a),ib=L.search(b);if(ia<0)return '';const e=ib>ia?ib:L.length;return d.slice(ia,e).replace(/^[^:,]*[:,]\s*/,'')};
+  const sub=t=>t?opsOf({d:t,t:'Spell Card',r:'Normal',n:c.n,id:0,l:0,a:0,f:0,at:'',__o:null}):{ops:[]};
+  const oa=sub(seg(pr[0],pr[1])),ob=sub(seg(pr[1],pr[0]));
+  add(async x=>{let win;
+    if(callRW){const g=await coinCall(x.p),r=await tossCoin();win=g===r;msg(win?'Doğru tahmin!':'Yanlış tahmin');await sleep(900)}
+    else win=(await tossCoin())===0;
+    for(const f of (win?oa.ops:ob.ops))await f(x)})}
+function opsOf(c){if(c.__o)return c.__o;const d=c.d.replace(/\s+/g,' ').replace(/●/g,'. ').replace(/(?:if|when) this card (?:is sent|leaves|is destroyed)[^.]*\./gi,''),L=d.toLowerCase(),ops=[],o=c.__o={ops,sweep:false,trig:trigOf(c)};
   if(isM(c)&&!mtrig(c))return o;
   const add=f=>ops.push(f),tgT=o.trig==='atk'||o.trig==='sum';let m;
+  if(/\b(?:toss|flip)\b[^.]*\bcoins?\b|call (?:it|heads|a coin)|coin toss/.test(L)){coinOps(c,d,L,o);return o}
   if((m=L.match(/pay (\d+) life points/))&&!/halve/.test(L))o.cost=+m[1];
   if((m=L.match(/(\d+) or more atk/)))o.min=+m[1];
   if(/negate the attack/.test(L))add(async x=>{x.cancel=true});
   if(/negate the (?:activation|summon)|negate (?:its|that) activation/.test(L))add(async x=>{x.cancel=true});
   if(/inflict damage to your opponent equal to (?:that|its)/.test(L))add(async x=>{if(x.tg){const t=G.mon[x.tg.q][x.tg.i];if(t)damage(x.tg.q,A(t))}});
+  /* hands: both discard, then draw */
+  if(/both players discard (?:their (?:entire )?hands?|as many cards as possible from their hands)|each player discards? (?:their|all)[^.]*hand/.test(L))add(async x=>{[0,1].forEach(q=>{G.gy[q].push(...G.hand[q]);G.hand[q]=[]});msg('İki oyuncu da elini attı')});
+  if((m=L.match(/(?:each|both) players?[^.]*?draws? (\d+) cards?/))){const n=+m[1];add(async x=>{for(let i=0;i<n;i++){draw(0);draw(1)}})}
+  if((m=L.match(/your opponent draws? (\d+) cards?/))){const n=+m[1];add(async x=>{for(let i=0;i<n;i++)draw(1-x.p)})}
   if(/destroy all (?:attack position )?monsters your opponent controls/.test(L)){const ao=/attack position/.test(L);add(async x=>MON(1-x.p).forEach(t=>{if(!ao||!t.m.def)destroy(t.q,t.i)}))}
   else if(/destroy all monsters on the field/.test(L)){o.sweep=true;add(async x=>[0,1].forEach(q=>MON(q).forEach(t=>destroy(q,t.i))))}
-  else if(/destroy all monsters you control/.test(L)){o.sweep=true;add(async x=>MON(x.p).forEach(t=>destroy(t.q,t.i)))}
+  else if(/destroy all monsters you control/.test(L)){o.sweep=true;const half=/half[^.]*atk/.test(L);add(async x=>{const ms=MON(x.p),sum=ms.reduce((s,t)=>s+A(t.m),0);ms.forEach(t=>destroy(t.q,t.i));if(half)damage(x.p,Math.floor(sum/2))})}
+  if((m=L.match(/reveal the top (\d+) cards?/))){const n=+m[1],lv=L.match(/level (\d+) or lower/),mx=lv?+lv[1]:4;
+    add(async x=>{for(const q of [0,1]){const top=[];for(let i=0;i<n&&G.deck[q].length;i++)top.push(G.deck[q].pop());
+      for(const c2 of top){const z=G.mon[q].indexOf(null);if(isM(c2)&&c2.l<=mx&&z>=0)G.mon[q][z]={c:c2,fd:false,def:false,tn:G.tn,moved:true,att:false};else G.hand[q].push(c2)}}
+      sfx('summon');msg('Üstteki kartlar açıldı')})}
   if(/destroy all (?:other )?spell(?: and |\/)trap cards on the field/.test(L))add(async x=>[0,1].forEach(q=>STL(q).forEach(t=>t.s.c!==x.c&&destroyST(q,t.i))));
   else if(/destroy all spell(?: and |\/)trap cards your opponent controls/.test(L))add(async x=>STL(1-x.p).forEach(t=>destroyST(t.q,t.i)));
   if(tgT&&/destroy (?:it|that (?:target|monster|card))|destroy the attacking monster|destroy (?:1 )?monster that attacked/.test(L))add(async x=>{if(x.tg&&G.mon[x.tg.q][x.tg.i])destroy(x.tg.q,x.tg.i)});
@@ -239,15 +281,22 @@ function opsOf(c){if(c.__o)return c.__o;const d=c.d.replace(/\s+/g,' ').replace(
   if(!/destroy all/.test(L)&&/(?:target|select|destroy)[^.;]{0,25}1 (?:face-up )?spell(?:\/| or | and )trap(?: card)?/.test(L))add(async x=>{
     const it=[...STL(1-x.p),...(/on the field/.test(L)?STL(x.p).filter(t=>t.s.c!==x.c):[])].map(t=>{const h=t.s.fd&&t.q!==x.p;return{c:h?null:t.s.c,l:h?'Kapalı büyü/tuzak (bölge '+(t.i+1)+')':t.s.c.n,v:1,t}});
     const k=await choose(x.p,'Yok edilecek büyü/tuzağı seç',it);if(k>=0)destroyST(it[k].t.q,it[k].t.i)});
-  if((m=L.match(/draw (\d+|a) cards?/))&&!/opponent draws|each player/.test(L)){const n=m[1]==='a'?1:+m[1];add(async x=>{for(let i=0;i<n;i++)draw(x.p)})}
+  if((m=L.match(/draw (\d+|a) cards?/))&&!/opponent draws|each player|both players/.test(L)){const n=m[1]==='a'?1:+m[1];add(async x=>{for(let i=0;i<n;i++)draw(x.p)})}
   if((m=L.match(/inflict (\d+) (?:points of )?damage to your opponent/)))add(async x=>damage(1-x.p,+m[1]));
   if((m=L.match(/(?:increase your life points by|you gain) (\d+)/)))add(async x=>{G.lp[x.p]+=+m[1]});
+  if(/(?:banish|remove from play|remove) all cards[^.]*graveyard/.test(L))add(async x=>{G.gy[/opponent/.test(L)?1-x.p:x.p]=[];msg('Mezarlık oyundan çıkarıldı')});
+  if((m=L.match(/send (?:the top )?(\d+|a) cards? (?:from the top of |of )?your deck to the graveyard/))){const n=m[1]==='a'?1:+m[1];add(async x=>{for(let i=0;i<n&&G.deck[x.p].length;i++)G.gy[x.p].push(G.deck[x.p].pop())})}
   if(((/(?:target|select) (?:1|up to 1) [^.;]*monster[^.;]* in (?:your|either player's|either|your opponent's) (?:graveyard|gy)/.test(L))&&/special summon/.test(L))||/special summon 1 [^.;]*from your (?:graveyard|gy)/.test(L))add(async x=>{
     const sc=/either (?:player's )?(?:graveyard|gy)/.test(L)?[0,1]:/your opponent's (?:graveyard|gy)/.test(L)?[1-x.p]:[x.p],lv=L.match(/level (\d+) or lower/),it=[];
     sc.forEach(q=>G.gy[q].forEach(c=>{if(isM(c)&&(!lv||c.l<=+lv[1]))it.push({c,l:c.n,v:c.a,q})}));
     const z=G.mon[x.p].indexOf(null);if(z<0||!it.length)return msg('Çağrılacak hedef yok');
     const k=await choose(x.p,'Mezarlıktan çağıracağın canavarı seç',it,true);if(k<0)return;const t=it[k];
     G.gy[t.q].splice(G.gy[t.q].indexOf(t.c),1);G.mon[x.p][z]={c:t.c,fd:false,def:false,tn:G.tn,moved:true,att:false};sfx('summon')});
+  if((m=L.match(/special summon 1 ([^.;]*?) from your deck/)))add(async x=>{
+    const w=m[1],at=w.match(/(\d+) or less atk/),lv=w.match(/level (\d+) or lower/),att=(w.match(/\b(dark|light|earth|water|fire|wind|divine)\b/)||[])[1],z=G.mon[x.p].indexOf(null),seen={};
+    if(z<0)return;const it=G.deck[x.p].filter(c2=>isM(c2)&&(!at||c2.a<=+at[1])&&(!lv||c2.l<=+lv[1])&&(!att||c2.at.toLowerCase()===att)&&!seen[c2.id]&&(seen[c2.id]=1)).slice(0,40).map(c2=>({c:c2,l:c2.n,v:c2.a}));
+    if(!it.length)return;const k=await choose(x.p,'Desteden çağıracağın canavarı seç',it,true);if(k<0)return;const c2=it[k].c;
+    G.deck[x.p].splice(G.deck[x.p].indexOf(c2),1);G.mon[x.p][z]={c:c2,fd:false,def:false,tn:G.tn,moved:true,att:false};shuffle(G.deck[x.p]);sfx('summon')});
   if(/take control of (?:1 [^.;]*monster|it|that)/.test(L))add(async x=>{
     const it=MON(1-x.p).map(t=>({c:t.m.fd?null:t.m.c,l:t.m.fd?'Kapalı canavar':t.m.c.n,v:A(t.m),t})),z=G.mon[x.p].indexOf(null);
     if(z<0||!it.length)return;const k=await choose(x.p,'Kontrol alacağın canavarı seç',it);if(k<0)return;const t=it[k].t;
@@ -257,8 +306,8 @@ function opsOf(c){if(c.__o)return c.__o;const d=c.d.replace(/\s+/g,' ').replace(
     const back=t=>{G.hand[t.q].push(t.m.c);G.mon[t.q][t.i]=null};
     if(all)it.forEach(i=>back(i.t));else{const k=await choose(x.p,'Ele geri dönecek canavarı seç',it);if(k>=0)back(it[k].t)}});
   if((m=L.match(/add 1 ([^.;]*?) from your deck to your hand/)))add(async x=>{
-    const w=m[1],nm=d.match(/add 1 "([^"]+)"/),lv=w.match(/level (\d+) or lower/),seen={};
-    const f=c=>(nm?c.n===nm[1]:true)&&(/monster/.test(w)?isM(c):/spell/.test(w)?c.t==='Spell Card':/trap/.test(w)?c.t==='Trap Card':true)&&(!lv||!isM(c)||c.l<=+lv[1]);
+    const w=m[1],nm=d.match(/add 1 "([^"]+)"/),lv=w.match(/level (\d+) or lower/),at=w.match(/(\d+) or less atk/),seen={};
+    const f=c=>(nm?c.n===nm[1]:true)&&(/monster/.test(w)?isM(c):/spell/.test(w)?c.t==='Spell Card':/trap/.test(w)?c.t==='Trap Card':true)&&(!lv||!isM(c)||c.l<=+lv[1])&&(!at||!isM(c)||c.a<=+at[1]);
     const it=G.deck[x.p].filter(c=>f(c)&&!seen[c.id]&&(seen[c.id]=1)).slice(0,40).map(c=>({c,l:c.n,v:c.a}));
     if(!it.length)return;const k=await choose(x.p,'Desteden elinize alacağın kartı seç',it);if(k<0)return;
     const i=G.deck[x.p].indexOf(it[k].c);G.hand[x.p].push(G.deck[x.p].splice(i,1)[0]);shuffle(G.deck[x.p])});
@@ -270,8 +319,20 @@ function opsOf(c){if(c.__o)return c.__o;const d=c.d.replace(/\s+/g,' ').replace(
       const k=await choose(x.p,'Ekipman takılacak canavarı seç',it);if(k<0)return;const t=it[k].t,n=e?(neg?-1:1)*(+e[1]):0,w=e?[e[2],e[3]]:[];
       (t.m.eq=t.m.eq||[]).push({a:w.includes('atk')?n:0,d:w.includes('def')?n:0,card:c,z:x.zone.i});G.st[x.p][x.zone.i].eqTo={q:t.q,i:t.i}})}
   return o}
-async function runMon(q,c,i,kind){if(mtrig(c)!==kind)return;const o=opsOf(c);if(!o.ops.length)return;msg(c.n+' etkisi');
-  const x={p:q,c,tg:null};for(const f of o.ops)await f(x);render()}
+async function runMon(q,c,i,kind){if(mtrig(c)!==kind)return;const o=opsOf(c);if(!o.ops.length)return;
+  if(kind!=='ign'&&/\byou can\b|\byou may\b/i.test(c.d.replace(/\s+/g,' '))&&!(await ask(q,c)))return;
+  msg(c.n+' etkisi');const x={p:q,c,tg:null};for(const f of o.ops)await f(x);render();await flushPend()}
+/* "sent to the Graveyard" / "destroyed by battle" triggers (Revival Jam, Sangan, Mystic Tomato ...) */
+async function flushPend(){while(G&&G.pend&&G.pend.length&&!G.over){const e=G.pend.shift();await gyTrig(e.q,e.c,e.btl)}}
+async function gyTrig(q,c,btl){
+  const T=c.d.replace(/\s+/g,' '),m=T.match(/(?:when|if) this card (?:is )?(destroyed by battle(?: and sent to the graveyard)?|sent (?:from the field )?to the graveyard)[^:,]*[:,]\s*(.*)$/i);
+  if(!m)return;if(/destroyed by battle/i.test(m[1])&&!btl)return;
+  const body=m[2],rv=body.match(/pay (\d+) life points;? special summon it[^.]*standby phase/i);
+  if(rv){const n=+rv[1];if(G.lp[q]<=n)return;const ok=q===1?G.lp[q]>n+2000:await ask(q,c,body);if(!ok)return;
+    damage(q,n);G.rev[q].push(c);msg(c.n+': sonraki Standby Phase\'de geri gelecek');render();return}
+  const o=opsOf({d:body,t:'Spell Card',r:'Normal',n:c.n,id:0,l:0,a:0,f:0,at:'',__o:null});if(!o.ops.length)return;
+  if(/\byou can\b|\byou may\b/i.test(body)&&!(await ask(q,c,body)))return;
+  msg(c.n+' etkisi');const x={p:q,c,tg:null};for(const f of o.ops)await f(x);render()}
 async function trapWindow(q,trig,tg,deep){const el=[],t=tg&&G.mon[tg.q][tg.i];
   G.st[q].forEach((s,i)=>{if(s&&s.fd&&s.tn<G.tn&&s.c.t==='Trap Card'){const o=opsOf(s.c);if(o.ops.length&&o.trig===trig&&!(o.min&&t&&A(t)<o.min)&&!(o.cost&&G.lp[q]<=o.cost))el.push({s,i,c:s.c,l:s.c.n,v:1})}});
   if(q===0)G.st[0].forEach((s,i)=>{if(s&&s.fd&&s.tn<G.tn&&s.c.t==='Spell Card'&&s.c.r==='Quick-Play'&&opsOf(s.c).ops.length)el.push({s,i,c:s.c,l:s.c.n+' (Hızlı Büyü)',v:1})});
@@ -280,7 +341,7 @@ async function trapWindow(q,trig,tg,deep){const el=[],t=tg&&G.mon[tg.q][tg.i];
   if(k<0)return{cancel:false};const e=el[k],o=opsOf(e.c);e.s.fd=false;render();msg(e.c.n+'!');sfx('trap');
   if(!deep&&e.c.t==='Trap Card'&&trig!=='actT'){const w2=await trapWindow(1-q,'actT',null,1);if(w2.cancel){destroyST(q,e.i);render();msg(e.c.n+' geçersiz kılındı');return{cancel:false}}}
   if(o.cost)damage(q,o.cost);const x={p:q,c:e.c,tg};for(const f of o.ops)await f(x);
-  if(e.c.r!=='Continuous')destroyST(q,e.i);render();return x}
+  if(e.c.r!=='Continuous')destroyST(q,e.i);render();await flushPend();return x}
 
 /* ---- sound (synthesized, no asset files) ---- */
 let AC=null,SOUND=localStorage.getItem('snd')!=='0',MUSIC=localStorage.getItem('mus')!=='0',mt=null,mi=0;
@@ -355,9 +416,15 @@ function startDuel(o){o=o||{};
   else if(pd.length<40){const mm=POOL.filter(c=>isM(c)&&c.a>=0);while(pd.length<40)pd.push(mm[Math.random()*mm.length|0])}
   const E=()=>Array(5).fill(null);
   const L=o.lp||8000;
-  G={match:!!o.match,story:o.story==null?null:o.story,max:[8000,L],loser:null,ended:false,lp:[8000,L],deck:[shuffle(pd.slice()),shuffle((o.deck||themedDeck(null,false)).slice())],hand:[[],[]],mon:[E(),E()],st:[E(),E()],gy:[[],[]],turn:0,tn:0,phase:'main',summoned:false,over:false,atkFrom:null};
+  G={match:!!o.match,story:o.story==null?null:o.story,max:[8000,L],loser:null,ended:false,lp:[8000,L],deck:[shuffle(pd.slice()),shuffle((o.deck||themedDeck(null,false)).slice())],hand:[[],[]],mon:[E(),E()],st:[E(),E()],gy:[[],[]],rev:[[],[]],pend:[],turn:0,tn:0,phase:'main',summoned:false,over:false,atkFrom:null};
   for(let i=0;i<5;i++){draw(0);draw(1)}
-  $('#over').style.display='none';$('#ovb').textContent=(G.story==null&&!G.match)?'Ana menü':'Devam';show('duel');info(null);startTurn(0);
+  $('#over').style.display='none';$('#ovb').textContent=(G.story==null&&!G.match)?'Ana menü':'Devam';show('duel');info(null);render();
+  const gg=G;
+  (async()=>{ /* coin toss decides who goes first */
+    const call=await coinCall(0),r=await tossCoin();if(G!==gg)return;let first;
+    if(call===r){msg('Doğru tahmin!');await sleep(900);first=(await buttonsUI('Yazı tura kazandın','Düelloya kim başlasın?',['Ben başlarım','Rakip başlasın']))===0?0:1}
+    else{msg('Yanlış tahmin, rakip başlıyor');await sleep(1200);first=1}
+    if(G!==gg)return;startTurn(first)})();
 }
 function msg(t){const l=$('#log');l.textContent=t;l.style.display='block';clearTimeout(msg.t);msg.t=setTimeout(()=>l.style.display='none',1800)}
 const EXO=['Exodia the Forbidden One','Right Leg of the Forbidden One','Left Leg of the Forbidden One','Right Arm of the Forbidden One','Left Arm of the Forbidden One'];
@@ -368,7 +435,10 @@ function canAtk(p,m){if((hasF(0,'Gravity Bind')||hasF(1,'Gravity Bind'))&&m.c.l>
 function startTurn(p){
   G.turn=p;G.tn++;G.phase='main';G.summoned=false;G.atkFrom=null;
   G.mon[p].forEach(m=>{if(m){m.moved=false;m.att=false;m.used=false}});
-  draw(p);
+  /* Standby Phase: revive cards (Revival Jam ...) */
+  G.rev[p]=G.rev[p].filter(c=>{const i=G.gy[p].indexOf(c),z=G.mon[p].indexOf(null);if(i<0)return false;if(z<0)return true;
+    G.gy[p].splice(i,1);G.mon[p][z]={c,fd:false,def:true,tn:G.tn,moved:true,att:false};sfx('summon');msg(c.n+' Savunma Pozisyonunda geri döndü');return false});
+  if(G.tn>1)draw(p);
   render();msg((p===0?'Senin turun':'Rakibin turu')+' · Draw ve Standby geçti, Main Phase 1');
   if(G.over)return end();
   if(p===1)aiTurn();
@@ -381,7 +451,9 @@ async function endTurn(){if(G.over||G.ending)return;G.ending=true;const p=G.turn
   startTurn(1-p)}
 function end(){if(G.ended)return;G.ended=true;render();const w=G.loser===1;sfx(w?'win':'lose');$('#ovt').textContent=(w?'Kazandın!':'Kaybettin')+(MATCH?' ('+(MATCH.w[0]+(w?1:0))+'-'+(MATCH.w[1]+(w?0:1))+')':'');$('#over').style.display='flex'}
 function damage(q,n){if(n>0)sfx('hit');G.lp[q]=Math.max(0,G.lp[q]-n);if(G.lp[q]<=0){G.over=true;G.loser=q}}
-function destroy(q,i){const m=G.mon[q][i];if(!m)return;sfx('boom');for(const e of m.eq||[]){const s=G.st[q][e.z];if(s&&s.c===e.card){G.gy[q].push(s.c);G.st[q][e.z]=null}}G.gy[q].push(m.c);G.mon[q][i]=null}
+function destroy(q,i,btl){const m=G.mon[q][i];if(!m)return;sfx('boom');for(const e of m.eq||[]){const s=G.st[q][e.z];if(s&&s.c===e.card){G.gy[q].push(s.c);G.st[q][e.z]=null}}
+  if(G.pend&&/sent (?:from the field )?to the graveyard/i.test(m.c.d.replace(/\s+/g,' ')))G.pend.push({q,c:m.c,btl:!!btl});
+  G.gy[q].push(m.c);G.mon[q][i]=null}
 function destroyST(q,i){const s=G.st[q][i];if(!s)return;if(s.eqTo){const m=G.mon[s.eqTo.q][s.eqTo.i];if(m)m.eq=(m.eq||[]).filter(e=>e.card!==s.c)}G.gy[q].push(s.c);G.st[q][i]=null}
 const need=c=>c.l>=7?2:c.l>=5?1:0;
 function canSummon(p,c){const n=need(c),mc=G.mon[p].filter(Boolean).length,free=5-mc;return !G.summoned&&mc>=n&&free+n>=1}
@@ -394,6 +466,7 @@ async function summon(p,c,set){
     tr.forEach(i=>destroy(p,i))}
   const z=G.mon[p].indexOf(null);G.hand[p].splice(G.hand[p].indexOf(c),1);
   const m=G.mon[p][z]={c,fd:!!set,def:!!set,tn:G.tn,moved:true,att:false};G.summoned=true;sfx(set?'set':'summon');render();
+  await flushPend();
   if(!set){const w=await trapWindow(1-p,'sum',{q:p,i:z});if(w.cancel){if(G.mon[p][z]===m)destroy(p,z);return}if(G.mon[p][z]===m)await runMon(p,c,z,'sum')}
 }
 async function flipUp(p,i){const m=G.mon[p][i];m.fd=false;m.def=false;m.moved=true;sfx('summon');render();
@@ -414,7 +487,7 @@ async function useSpell(p,c,fromField){
   if(c.n==='Swords of Revealing Light'&&x.zone){G.st[p][x.zone.i].turns=3;MON(1-p).forEach(t=>{t.m.fd=false});msg('Swords of Revealing Light: 3 tur')}
   if(c.r==='Continuous'||c.r==='Field'){if(c.n!=='Swords of Revealing Light')msg(c.n+' sahada');return}
   if(!o.ops.length){msg(c.n+': etki desteklenmiyor');return}
-  msg(c.n);for(const f of o.ops)await f(x);render();
+  msg(c.n);for(const f of o.ops)await f(x);render();await flushPend();
 }
 async function attack(p,ai,ti){
   const q=1-p,a=G.mon[p][ai];a.att=true;G.atkFrom=null;sfx('atk');
@@ -426,8 +499,9 @@ async function attack(p,ai,ti){
   let ad=false,dd=false;
   if(!d.def){const x=A(a)-A(d);if(x>0){dd=true;damage(q,x)}else if(x<0){ad=true;damage(p,-x)}else{ad=dd=true}}
   else{const x=A(a)-D(d);if(x>0)dd=true;else if(x<0)damage(p,-x)}
-  if(dd)destroy(q,ti);if(ad)destroy(p,ai);
+  if(dd)destroy(q,ti,true);if(ad)destroy(p,ai,true);
   if(dd)await runMon(q,d.c,ti,'des');if(ad)await runMon(p,a.c,ai,'des');
+  await flushPend();
 }
 /* ---- AI ---- */
 async function aiTurn(){try{await aiTurnRun()}catch(e){console.error(e);msg('Hata: '+(e&&e.message||e))}
@@ -493,7 +567,7 @@ function onST(side,i){
   const b=[];
   if(mine()&&side===0&&s.fd){
     if(s.c.t==='Spell Card'&&((s.c.r==='Quick-Play'&&s.tn<G.tn&&(isMain()||G.phase==='battle'))||(s.c.r!=='Quick-Play'&&isMain())))b.push(['Aktif et',async()=>{G.st[0][i]=null;await useSpell(0,s.c,true)}]);
-    else if(s.c.t==='Trap Card'&&s.tn<G.tn&&opsOf(s.c).trig==='free'&&opsOf(s.c).ops.length)b.push(['Aktif et',async()=>{const o=opsOf(s.c);const w=await trapWindow(1,'actT',null);if(w.cancel){destroyST(0,i);render();return msg(s.c.n+' geçersiz kılındı')}if(o.cost)damage(0,o.cost);s.fd=false;render();sfx('trap');msg(s.c.n+'!');const x={p:0,c:s.c,tg:null};for(const f of o.ops)await f(x);if(s.c.r!=='Continuous')destroyST(0,i)}]);
+    else if(s.c.t==='Trap Card'&&s.tn<G.tn&&opsOf(s.c).trig==='free'&&opsOf(s.c).ops.length)b.push(['Aktif et',async()=>{const o=opsOf(s.c);const w=await trapWindow(1,'actT',null);if(w.cancel){destroyST(0,i);render();return msg(s.c.n+' geçersiz kılındı')}if(o.cost)damage(0,o.cost);s.fd=false;render();sfx('trap');msg(s.c.n+'!');const x={p:0,c:s.c,tg:null};for(const f of o.ops)await f(x);if(s.c.r!=='Continuous')destroyST(0,i);await flushPend()}]);
   }
   render();menu(b);
 }
