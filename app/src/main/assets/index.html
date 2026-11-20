@@ -72,7 +72,8 @@ button:active{background:var(--gd)}
   <h1>Duel Legend</h1><h2>Dokun, çağır, saldır.</h2>
   <div class="g">
   <button onclick="openStory()">Hikaye</button>
-  <button onclick="startDuel()">Serbest Düello</button>
+  <button onclick="startDuel()">Tekli Düello</button>
+  <button onclick="startMatch()">Eşleşme (3 maç)</button>
   <button onclick="openCards('deck')">Deste Hazırla</button>
   <button onclick="openCards('list')">Kart Listesi</button>
   <button id="bSnd" onclick="toggleSnd()"></button>
@@ -90,7 +91,7 @@ button:active{background:var(--gd)}
     <div class="lp"><span id="lp1">8000</span><div class="bar"><i id="bar1"></i></div></div>
     <img class="big" id="dimg" alt="">
     <div class="nm" id="dnm"></div><div class="tp" id="dtp"></div><div class="ds" id="dds"></div>
-    <div class="ctl"><button id="bBattle">Savaş</button><button id="bEnd">Turu bitir</button></div>
+    <div class="ctl"><button id="bBattle">Savaş</button><button id="bM2">Main 2</button><button id="bEnd">Turu bitir</button></div>
     <div class="lp"><span id="lp0">8000</span><div class="bar"><i id="bar0"></i></div></div>
   </aside>
   <div id="field"><div id="top"></div><div id="rows"></div><div id="log"></div><div id="amenu"></div></div>
@@ -181,7 +182,7 @@ function cardsRender(){
   let src=CS.tab==='deck'?DECK.map(i=>BYID[i]).filter(Boolean):POOL;
   src=src.filter(c=>(tf==='all'||(tf==='m'&&isM(c))||(tf==='s'&&c.t==='Spell Card')||(tf==='t'&&c.t==='Trap Card'))&&(!q||c.n.toLowerCase().includes(q)));
   const per=40,pages=Math.max(1,Math.ceil(src.length/per));CS.page=Math.min(CS.page,pages-1);
-  $('#pg').textContent=`${CS.page+1}/${pages} · ${src.length} · Deste ${DECK.length}`;
+  $('#pg').textContent=`${CS.page+1}/${pages} · ${src.length} · Deste ${DECK.length} (40–60)`;
   $('#grid').innerHTML=src.slice(CS.page*per,CS.page*per+per).map(c=>{const n=DECK.filter(i=>i===c.id).length;return `<div style="position:relative" data-id="${c.id}">${cardEl(c,{hideStat:true})}${n&&CS.tab==='pool'?`<span class="cnt">${n}</span>`:''}</div>`}).join('')||'<p style="font-size:3vh;padding:3vh">Kart yok.</p>';
   info(CS.sel,'c');
   $('#cact').innerHTML=deckMode&&CS.sel?'<button onclick="addC()">+ Ekle</button><button onclick="remC()">− Çıkar</button>':'';
@@ -208,6 +209,7 @@ function pickUI(title,items,opt,view){return new Promise(res=>{const o=$('#pick'
 async function choose(p,title,items,opt){if(!items.length)return -1;if(p===1)return items.reduce((b,x,i)=>(x.v||0)>(items[b].v||0)?i:b,0);if(items.length===1&&!opt)return 0;return pickUI(title,items,opt)}
 const viewGY=q=>pickUI(q?'Rakip mezarlığı':'Mezarlığım',G.gy[q].map(c=>({c,l:c.n})),false,true);
 function trigOf(c){const L=c.d.toLowerCase();if(c.t!=='Trap Card')return 'free';
+  if(c.r==='Counter'){if(/trap card is activated|activates? a trap|trap card[^.]*activat/.test(L)&&!/summon/.test(L))return 'actT';if(/summon/.test(L))return 'sum'}
   if(/declares an attack|attack is declared|attacking monster|attacked/.test(L))return 'atk';
   if(/(?:when|if) (?:your )?opponent[^.:;]*summons?|normal or flip summon/.test(L))return 'sum';
   if(/activates? (?:a|the) spell|spell card is activated|activates? a card or effect|activates? a spell\/trap/.test(L))return 'act';
@@ -270,11 +272,13 @@ function opsOf(c){if(c.__o)return c.__o;const d=c.d.replace(/\s+/g,' ').replace(
   return o}
 async function runMon(q,c,i,kind){if(mtrig(c)!==kind)return;const o=opsOf(c);if(!o.ops.length)return;msg(c.n+' etkisi');
   const x={p:q,c,tg:null};for(const f of o.ops)await f(x);render()}
-async function trapWindow(q,trig,tg){const el=[],t=tg&&G.mon[tg.q][tg.i];
+async function trapWindow(q,trig,tg,deep){const el=[],t=tg&&G.mon[tg.q][tg.i];
   G.st[q].forEach((s,i)=>{if(s&&s.fd&&s.tn<G.tn&&s.c.t==='Trap Card'){const o=opsOf(s.c);if(o.ops.length&&o.trig===trig&&!(o.min&&t&&A(t)<o.min)&&!(o.cost&&G.lp[q]<=o.cost))el.push({s,i,c:s.c,l:s.c.n,v:1})}});
+  if(q===0)G.st[0].forEach((s,i)=>{if(s&&s.fd&&s.tn<G.tn&&s.c.t==='Spell Card'&&s.c.r==='Quick-Play'&&opsOf(s.c).ops.length)el.push({s,i,c:s.c,l:s.c.n+' (Hızlı Büyü)',v:1})});
   if(!el.length)return{cancel:false};
   let k=-1;if(q===0)k=await pickUI('Tuzak aç? ('+({atk:'saldırı',sum:'çağırma',act:'büyü aktifleştirme'})[trig]+')',el,true);else if(Math.random()<.85)k=0;
   if(k<0)return{cancel:false};const e=el[k],o=opsOf(e.c);e.s.fd=false;render();msg(e.c.n+'!');sfx('trap');
+  if(!deep&&e.c.t==='Trap Card'&&trig!=='actT'){const w2=await trapWindow(1-q,'actT',null,1);if(w2.cancel){destroyST(q,e.i);render();msg(e.c.n+' geçersiz kılındı');return{cancel:false}}}
   if(o.cost)damage(q,o.cost);const x={p:q,c:e.c,tg};for(const f of o.ops)await f(x);
   if(e.c.r!=='Continuous')destroyST(q,e.i);render();return x}
 
@@ -317,8 +321,11 @@ function openStory(){
   const c=cleared();$('#tl').innerHTML=STORY.map((x,i)=>`<button data-s="${i}">${c.includes(i)?'✓ ':''}${i+1}. ${x.n} · ${x.t}</button>`).join('');show('story')}
 $('#tl').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(b)playStory(+b.dataset.s)});
 function playStory(i){const x=STORY[i];talk(x.n,x.t,x.intro,()=>startDuel({deck:themedDeck(x.race,i>=5),story:i,lp:8000+i*500}))}
+let MATCH=null;
+function startMatch(){MATCH={w:[0,0],n:1};startDuel({match:1})}
 function afterDuel(){
   $('#over').style.display='none';
+  if(G&&G.match&&MATCH){G.loser===1?MATCH.w[0]++:MATCH.w[1]++;if(MATCH.w[0]>=2||MATCH.w[1]>=2){MATCH=null;show('home');return}MATCH.n++;startDuel({match:1});return}
   if(!G||G.story==null){show('home');return}
   const i=G.story,won=G.loser===1;
   if(!won){show('story');return}
@@ -343,25 +350,36 @@ function randomDeck(){const r=a=>a[Math.random()*a.length|0],m=POOL.filter(c=>is
   for(let i=0;i<40;i++){d.push((i<26||!s.length&&!t.length?r(m):i<34&&s.length?r(s):t.length?r(t):r(m)).id)}return d}
 function startDuel(o){o=o||{};
   if(!POOL.length){init();return}
-  let pd=DECK.map(i=>BYID[i]).filter(Boolean);if(pd.length<20)pd=randomDeck().map(i=>BYID[i]);
+  let pd=DECK.map(i=>BYID[i]).filter(Boolean);
+  if(!pd.length)pd=randomDeck().map(i=>BYID[i]);
+  else if(pd.length<40){const mm=POOL.filter(c=>isM(c)&&c.a>=0);while(pd.length<40)pd.push(mm[Math.random()*mm.length|0])}
   const E=()=>Array(5).fill(null);
   const L=o.lp||8000;
-  G={story:o.story==null?null:o.story,max:[8000,L],loser:null,ended:false,lp:[8000,L],deck:[shuffle(pd.slice()),shuffle((o.deck||themedDeck(null,false)).slice())],hand:[[],[]],mon:[E(),E()],st:[E(),E()],gy:[[],[]],turn:0,tn:0,phase:'main',summoned:false,over:false,atkFrom:null};
+  G={match:!!o.match,story:o.story==null?null:o.story,max:[8000,L],loser:null,ended:false,lp:[8000,L],deck:[shuffle(pd.slice()),shuffle((o.deck||themedDeck(null,false)).slice())],hand:[[],[]],mon:[E(),E()],st:[E(),E()],gy:[[],[]],turn:0,tn:0,phase:'main',summoned:false,over:false,atkFrom:null};
   for(let i=0;i<5;i++){draw(0);draw(1)}
-  $('#over').style.display='none';$('#ovb').textContent=G.story==null?'Ana menü':'Devam';show('duel');info(null);startTurn(0);
+  $('#over').style.display='none';$('#ovb').textContent=(G.story==null&&!G.match)?'Ana menü':'Devam';show('duel');info(null);startTurn(0);
 }
 function msg(t){const l=$('#log');l.textContent=t;l.style.display='block';clearTimeout(msg.t);msg.t=setTimeout(()=>l.style.display='none',1800)}
-function draw(p){if(!G.deck[p].length){G.over=true;G.loser=p;return}G.hand[p].push(G.deck[p].pop());sfx('draw')}
+const EXO=['Exodia the Forbidden One','Right Leg of the Forbidden One','Left Leg of the Forbidden One','Right Arm of the Forbidden One','Left Arm of the Forbidden One'];
+function draw(p){if(!G.deck[p].length){G.over=true;G.loser=p;return}G.hand[p].push(G.deck[p].pop());sfx('draw');if(EXO.every(n=>G.hand[p].some(c=>c.n===n))){G.over=true;G.loser=1-p;msg('Exodia! Tüm parçalar elde')}}
+const isMain=()=>G.phase==='main'||G.phase==='main2';
+const hasF=(q,n)=>G.st[q].some(s=>s&&!s.fd&&s.c.n===n);
+function canAtk(p,m){if((hasF(0,'Gravity Bind')||hasF(1,'Gravity Bind'))&&m.c.l>=4)return false;if(hasF(1-p,'Swords of Revealing Light'))return false;if((hasF(0,'Messenger of Peace')||hasF(1,'Messenger of Peace'))&&A(m)>=1500)return false;return true}
 function startTurn(p){
   G.turn=p;G.tn++;G.phase='main';G.summoned=false;G.atkFrom=null;
   G.mon[p].forEach(m=>{if(m){m.moved=false;m.att=false;m.used=false}});
-  if(!(G.tn===1))draw(p);
-  render();msg(p===0?'Senin turun':'Rakibin turu');
+  draw(p);
+  render();msg((p===0?'Senin turun':'Rakibin turu')+' · Draw ve Standby geçti, Main Phase 1');
   if(G.over)return end();
   if(p===1)aiTurn();
 }
-function endTurn(){if(G.over)return;const p=G.turn;G.mon.forEach(r=>r.forEach(m=>{if(m)m.tb=0}));while(G.hand[p].length>6)G.gy[p].push(G.hand[p].shift());startTurn(1-p)}
-function end(){if(G.ended)return;G.ended=true;render();const w=G.loser===1;sfx(w?'win':'lose');$('#ovt').textContent=w?'Kazandın!':'Kaybettin';$('#over').style.display='flex'}
+async function endTurn(){if(G.over||G.ending)return;G.ending=true;const p=G.turn;
+  try{G.mon.forEach(r=>r.forEach(m=>{if(m)m.tb=0}));
+  [0,1].forEach(q=>G.st[q].forEach((st,i)=>{if(st&&st.turns!=null&&p!==q){st.turns--;if(st.turns<=0){destroyST(q,i);msg('Swords of Revealing Light sona erdi')}}}));
+  if(p===0){while(G.hand[0].length>6){const k=await pickUI('El 6 karta düşmeli. Atılacak kartı seç ('+G.hand[0].length+')',G.hand[0].map(c=>({c,l:c.n})),false);G.gy[0].push(G.hand[0].splice(k,1)[0])}}
+  else while(G.hand[p].length>6)G.gy[p].push(G.hand[p].shift())}finally{G.ending=false}
+  startTurn(1-p)}
+function end(){if(G.ended)return;G.ended=true;render();const w=G.loser===1;sfx(w?'win':'lose');$('#ovt').textContent=(w?'Kazandın!':'Kaybettin')+(MATCH?' ('+(MATCH.w[0]+(w?1:0))+'-'+(MATCH.w[1]+(w?0:1))+')':'');$('#over').style.display='flex'}
 function damage(q,n){if(n>0)sfx('hit');G.lp[q]=Math.max(0,G.lp[q]-n);if(G.lp[q]<=0){G.over=true;G.loser=q}}
 function destroy(q,i){const m=G.mon[q][i];if(!m)return;sfx('boom');for(const e of m.eq||[]){const s=G.st[q][e.z];if(s&&s.c===e.card){G.gy[q].push(s.c);G.st[q][e.z]=null}}G.gy[q].push(m.c);G.mon[q][i]=null}
 function destroyST(q,i){const s=G.st[q][i];if(!s)return;if(s.eqTo){const m=G.mon[s.eqTo.q][s.eqTo.i];if(m)m.eq=(m.eq||[]).filter(e=>e.card!==s.c)}G.gy[q].push(s.c);G.st[q][i]=null}
@@ -370,14 +388,16 @@ function canSummon(p,c){const n=need(c),mc=G.mon[p].filter(Boolean).length,free=
 async function summon(p,c,set){
   if(G.summoned)return msg('Bu tur zaten canavar çağırdın');
   if(!canSummon(p,c))return msg(need(c)&&G.mon[p].filter(Boolean).length<need(c)?'Yeterli tribute yok':'Canavar alanı dolu');
-  const n=need(c),ids=G.mon[p].map((m,i)=>m?i:-1).filter(i=>i>=0).sort((a,b)=>G.mon[p][a].c.a-G.mon[p][b].c.a);
-  for(let k=0;k<n;k++)destroy(p,ids[k]);
+  const n=need(c),mons=MON(p),tr=[];
+  if(n>0){if(p===0&&mons.length>n){for(let k=0;k<n;k++){const it=mons.filter(t=>!tr.includes(t.i)).map(t=>({c:t.m.c,l:'Feda et',t}));const kk=await pickUI('Feda edilecek canavarı seç ('+(k+1)+'/'+n+')',it,true);if(kk<0)return;tr.push(it[kk].t.i)}}
+    else mons.sort((a,b)=>a.m.c.a-b.m.c.a).slice(0,n).forEach(t=>tr.push(t.i));
+    tr.forEach(i=>destroy(p,i))}
   const z=G.mon[p].indexOf(null);G.hand[p].splice(G.hand[p].indexOf(c),1);
   const m=G.mon[p][z]={c,fd:!!set,def:!!set,tn:G.tn,moved:true,att:false};G.summoned=true;sfx(set?'set':'summon');render();
-  if(!set){await trapWindow(1-p,'sum',{q:p,i:z});if(G.mon[p][z]===m)await runMon(p,c,z,'sum')}
+  if(!set){const w=await trapWindow(1-p,'sum',{q:p,i:z});if(w.cancel){if(G.mon[p][z]===m)destroy(p,z);return}if(G.mon[p][z]===m)await runMon(p,c,z,'sum')}
 }
 async function flipUp(p,i){const m=G.mon[p][i];m.fd=false;m.def=false;m.moved=true;sfx('summon');render();
-  await trapWindow(1-p,'sum',{q:p,i});if(G.mon[p][i]===m)await runMon(p,m.c,i,'flip')}
+  const w=await trapWindow(1-p,'sum',{q:p,i});if(w.cancel){if(G.mon[p][i]===m)destroy(p,i);return}if(G.mon[p][i]===m)await runMon(p,m.c,i,'flip')}
 function setST(p,c){const z=G.st[p].indexOf(null);if(z<0)return msg('Büyü/Tuzak alanı dolu');G.hand[p].splice(G.hand[p].indexOf(c),1);G.st[p][z]={c,fd:true,tn:G.tn};sfx('set')}
 async function useSpell(p,c,fromField){
   if(!fromField)G.hand[p].splice(G.hand[p].indexOf(c),1);
@@ -391,7 +411,8 @@ async function useSpell(p,c,fromField){
     G.st[p][z]={c,fd:false,tn:G.tn};x.zone={q:p,i:z};
   }else G.gy[p].push(c);
   render();
-  if(c.r==='Continuous'||c.r==='Field'){msg(c.n+' sahada');return}
+  if(c.n==='Swords of Revealing Light'&&x.zone){G.st[p][x.zone.i].turns=3;MON(1-p).forEach(t=>{t.m.fd=false});msg('Swords of Revealing Light: 3 tur')}
+  if(c.r==='Continuous'||c.r==='Field'){if(c.n!=='Swords of Revealing Light')msg(c.n+' sahada');return}
   if(!o.ops.length){msg(c.n+': etki desteklenmiyor');return}
   msg(c.n);for(const f of o.ops)await f(x);render();
 }
@@ -427,7 +448,7 @@ async function aiTurnRun(){
   const cand=G.hand[p].filter(c=>isM(c)&&canSummon(p,c)).sort((a,b)=>b.a-a.a)[0];
   if(cand&&!G.over){const top=Math.max(0,...G.mon[q].filter(m=>m&&!m.fd).map(m=>A(m)));await summon(p,cand,cand.a<top&&cand.f>=cand.a);render();await sleep(700)}
   for(const c of [...G.hand[p]]){if(isM(c)||G.st[p].filter(Boolean).length>=3)continue;if(c.t==='Trap Card'||!opsOf(c).ops.length){setST(p,c);render();await sleep(300)}}
-  if(G.tn>1)for(let i=0;i<5&&!G.over;i++){const m=G.mon[p][i];if(!m||m.def||m.fd||m.att)continue;
+  if(G.tn>1)for(let i=0;i<5&&!G.over;i++){const m=G.mon[p][i];if(!m||m.def||m.fd||m.att||!canAtk(p,m))continue;
     const ts=G.mon[q].map((t,j)=>t?{j,v:t.def?D(t):A(t)}:null).filter(Boolean);
     if(!ts.length){msg('Rakip saldırdı');await attack(p,i,-1)}
     else{const ok=ts.filter(t=>t.v<A(m)).sort((a,b)=>b.v-a.v)[0];if(!ok)continue;msg('Rakip saldırdı');await attack(p,i,ok.j)}
@@ -441,10 +462,10 @@ function menu(b){const m=$('#amenu');m.innerHTML='';b.forEach(([l,f])=>{const e=
 function mine(){return G&&!G.over&&G.turn===0}
 function onHand(i){
   const c=G.hand[0][i];info(c);SEL=i;const b=[];
-  if(mine()&&G.phase==='main'){
-    if(isM(c)){b.push(['Çağır',()=>summon(0,c,false)],['Kapalı koy',()=>summon(0,c,true)])}
-    else if(c.t==='Spell Card')b.push(['Aktif et',()=>useSpell(0,c)],['Kapalı koy',()=>setST(0,c)]);
-    else b.push(['Kapalı koy',()=>setST(0,c)]);
+  if(mine()){const mn=isMain();
+    if(isM(c)){if(mn)b.push(['Çağır',()=>summon(0,c,false)],['Kapalı koy',()=>summon(0,c,true)])}
+    else if(c.t==='Spell Card'){if(mn||(c.r==='Quick-Play'&&G.phase==='battle'))b.push(['Aktif et',()=>useSpell(0,c)]);if(mn)b.push(['Kapalı koy',()=>setST(0,c)])}
+    else if(mn)b.push(['Kapalı koy',()=>setST(0,c)]);
   }
   render();menu(b);
 }
@@ -456,9 +477,10 @@ function onMon(side,i){
   if(mine()&&side===0){
     if(G.phase==='battle'&&!m.def&&!m.fd&&!m.att){
       if(G.tn<=1)b.push(['İlk turda saldırı yok',()=>{}]);
+      else if(!canAtk(0,m))b.push(['Saldıramaz (kart etkisi)',()=>{}]);
       else b.push(['Saldır',async()=>{if(!nonEmpty(G.mon[1]))await attack(0,i,-1);else{G.atkFrom=i;msg('Hedef seç')}}]);
     }
-    if(G.phase==='main'){
+    if(isMain()){
       if(m.fd&&m.tn<G.tn&&!m.moved)b.push(['Aç (Flip)',()=>flipUp(0,i)]);
       else if(!m.fd&&!m.moved&&m.tn<G.tn)b.push([m.def?'Saldırı pozisyonu':'Savunma pozisyonu',()=>{m.def=!m.def;m.moved=true}]);
       if(!m.fd&&!m.used&&mtrig(m.c)==='ign'&&opsOf(m.c).ops.length)b.push(['Etkiyi kullan',async()=>{m.used=true;await runMon(0,m.c,i,'ign')}]);
@@ -470,8 +492,8 @@ function onST(side,i){
   const s=G.st[side][i];if(!s)return;if(side===0||!s.fd)info(s.c);else info(null);
   const b=[];
   if(mine()&&side===0&&s.fd){
-    if(s.c.t==='Spell Card'&&G.phase==='main')b.push(['Aktif et',async()=>{G.st[0][i]=null;await useSpell(0,s.c,true)}]);
-    else if(s.c.t==='Trap Card'&&s.tn<G.tn&&opsOf(s.c).trig==='free'&&opsOf(s.c).ops.length)b.push(['Aktif et',async()=>{const o=opsOf(s.c);if(o.cost)damage(0,o.cost);s.fd=false;render();sfx('trap');msg(s.c.n+'!');const x={p:0,c:s.c,tg:null};for(const f of o.ops)await f(x);if(s.c.r!=='Continuous')destroyST(0,i)}]);
+    if(s.c.t==='Spell Card'&&((s.c.r==='Quick-Play'&&s.tn<G.tn&&(isMain()||G.phase==='battle'))||(s.c.r!=='Quick-Play'&&isMain())))b.push(['Aktif et',async()=>{G.st[0][i]=null;await useSpell(0,s.c,true)}]);
+    else if(s.c.t==='Trap Card'&&s.tn<G.tn&&opsOf(s.c).trig==='free'&&opsOf(s.c).ops.length)b.push(['Aktif et',async()=>{const o=opsOf(s.c);const w=await trapWindow(1,'actT',null);if(w.cancel){destroyST(0,i);render();return msg(s.c.n+' geçersiz kılındı')}if(o.cost)damage(0,o.cost);s.fd=false;render();sfx('trap');msg(s.c.n+'!');const x={p:0,c:s.c,tg:null};for(const f of o.ops)await f(x);if(s.c.r!=='Continuous')destroyST(0,i)}]);
   }
   render();menu(b);
 }
@@ -482,13 +504,14 @@ $('#duel').addEventListener('click',e=>{
   if(h)onHand(+h.dataset.h);else if(z){const k=z.dataset.z;if(k[0]==='m')onMon(+k[1],+z.dataset.i);else onST(+k[1],+z.dataset.i)}
   else{G.atkFrom=null;SEL=null;render()}
 });
+$('#bM2').onclick=()=>{if(mine()&&G.phase==='battle'){G.phase='main2';msg('Main Phase 2');render()}};
 $('#bBattle').onclick=()=>{if(mine()&&G.phase==='main'){G.phase='battle';msg(G.tn<=1?'Battle Phase (ilk turda saldırı yok)':'Battle Phase');render()}};
 $('#bEnd').onclick=()=>{if(mine()){$('#amenu').classList.remove('on');endTurn()}};
 function render(){
   if(!G)return;G.act=Date.now();
   $('#lp0').textContent=G.lp[0];$('#lp1').textContent=G.lp[1];
   $('#bar0').style.width=Math.min(100,G.lp[0]/G.max[0]*100)+'%';$('#bar1').style.width=Math.min(100,G.lp[1]/G.max[1]*100)+'%';
-  $('#top').innerHTML=`<span>Tur ${G.tn} · ${G.phase==='main'?'Ana faz':'Savaş fazı'} · Deste ${G.deck[0].length}/${G.deck[1].length}</span><button onclick="viewGY(0)">Mezarlığım (${G.gy[0].length})</button><button onclick="viewGY(1)">Rakip mezarlığı (${G.gy[1].length})</button>`;
+  $('#top').innerHTML=`<span>Tur ${G.tn} · ${({main:'Main Phase 1',battle:'Battle Phase',main2:'Main Phase 2'})[G.phase]} · Deste ${G.deck[0].length}/${G.deck[1].length}</span><button onclick="viewGY(0)">Mezarlığım (${G.gy[0].length})</button><button onclick="viewGY(1)">Rakip mezarlığı (${G.gy[1].length})</button>`;
   const row=(side,kind)=>`<div class="row">`+G[kind==='m'?'mon':'st'][side].map((x,i)=>{
     let inner='',cls='';
     if(x){const own=side===0;inner=cardEl(x.c,{fd:x.fd,def:x.def,mine:own,v:kind==='m'?(x.def?D(x):A(x)):null,cls:kind==='m'&&side===0&&G.atkFrom===i?'sel':''});
